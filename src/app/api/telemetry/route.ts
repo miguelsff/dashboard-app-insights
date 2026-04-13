@@ -1,12 +1,25 @@
-import { DefaultAzureCredential } from '@azure/identity';
+import {
+  AzureCliCredential,
+  ChainedTokenCredential,
+  EnvironmentCredential,
+  ManagedIdentityCredential,
+} from '@azure/identity';
 import { NextResponse } from 'next/server';
 import type { TelemetryRecord } from '@/types/telemetry';
 
-// Module-scope credential — token is cached internally by the SDK.
-const credential = new DefaultAzureCredential();
+// IDENTITY_ENDPOINT is set automatically by Azure App Service when Managed Identity is enabled.
+// Locally it is never present, so we skip straight to the local credential chain —
+// avoiding the slow IMDS probe (169.254.169.254) that DefaultAzureCredential triggers.
+const credential = process.env.IDENTITY_ENDPOINT
+  ? new ManagedIdentityCredential()
+  : new ChainedTokenCredential(
+      new EnvironmentCredential(), // Docker + Service Principal (AZURE_CLIENT_ID/TENANT_ID/CLIENT_SECRET)
+      new AzureCliCredential(),    // local npm run dev with `az login`
+    );
 
 const KQL = `
 dependencies
+| where timestamp > ago(24h)
 | order by timestamp desc
 | take 100
 | project timestamp, id, target, type, name, success, resultCode, duration,
@@ -30,7 +43,7 @@ export async function GET() {
     token = result.token;
   } catch {
     return NextResponse.json(
-      { error: 'Azure AD authentication failed — run `az login` locally or enable Managed Identity on the Web App' },
+      { error: 'Azure AD authentication failed. Locally: run `az login` or set AZURE_CLIENT_ID/TENANT_ID/CLIENT_SECRET in .env. On Azure: enable Managed Identity and assign Monitoring Reader role.' },
       { status: 401 },
     );
   }
