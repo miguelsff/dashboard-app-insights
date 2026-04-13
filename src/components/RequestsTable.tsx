@@ -10,9 +10,48 @@ function shortName(name: string): string {
     .replace("credicorp-dispatcher.", "");
 }
 
+const COL_WIDTHS = ["w-6", "w-32", "w-44", "w-36", "w-10", "w-20", "w-24", "w-12"];
+
+function RequestsTableSkeleton() {
+  return (
+    <div className="card">
+      <div className="skeleton h-3 w-32 rounded mb-4" />
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-surface-700">
+              {COL_WIDTHS.map((w, i) => (
+                <th key={i} className={`py-2 pr-3 ${w}`}>
+                  <div className="skeleton h-2.5 w-full rounded" />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 8 }).map((_, row) => (
+              <tr key={row} className="border-b border-surface-700/50">
+                {COL_WIDTHS.map((w, col) => (
+                  <td key={col} className="py-3 pr-3">
+                    <div
+                      className="skeleton h-3 rounded"
+                      style={{ width: col === 2 ? "80%" : col === 3 ? "70%" : "100%", opacity: 1 - row * 0.08 }}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function RequestsTable() {
-  const { telemetryData } = useTelemetry();
+  const { telemetryData, isLoading } = useTelemetry();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  if (isLoading) return <RequestsTableSkeleton />;
 
   // ISO 8601 strings are lexicographically ordered — no Date allocation needed.
   const sorted = [...telemetryData].sort((a, b) =>

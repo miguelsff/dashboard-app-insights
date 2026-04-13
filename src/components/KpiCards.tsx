@@ -3,8 +3,29 @@
 import { useTelemetry } from "@/context/TelemetryContext";
 import { formatDuration } from "@/lib/format";
 
+function KpiCardSkeleton() {
+  return (
+    <div className="card flex flex-col gap-3">
+      <div className="skeleton w-9 h-9 rounded-lg" />
+      <div className="space-y-2 pt-1">
+        <div className="skeleton h-7 w-14 rounded-md" />
+        <div className="skeleton h-3 w-28 rounded" />
+        <div className="skeleton h-3 w-36 rounded" />
+      </div>
+    </div>
+  );
+}
+
 export default function KpiCards() {
-  const { totalRequests, successCount, failureCount, avgDuration, successRate } = useTelemetry();
+  const { totalRequests, successCount, failureCount, avgDuration, successRate, isLoading } = useTelemetry();
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => <KpiCardSkeleton key={i} />)}
+      </div>
+    );
+  }
 
   const cards = [
     {
@@ -36,7 +57,7 @@ export default function KpiCards() {
     {
       label: "Failures",
       value: failureCount.toString(),
-      sub: "Ollama connection errors",
+      sub: "dependency errors",
       color: "text-red-400",
       bg: "bg-red-500/10",
       icon: (
@@ -49,7 +70,7 @@ export default function KpiCards() {
     {
       label: "Avg Duration",
       value: formatDuration(avgDuration),
-      sub: `${avgDuration.toLocaleString()}ms mean`,
+      sub: `${avgDuration.toLocaleString('en-US')}ms mean`,
       color: "text-yellow-400",
       bg: "bg-yellow-500/10",
       icon: (

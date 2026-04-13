@@ -6,8 +6,30 @@ import { TOOLTIP_STYLE } from "@/lib/chart-theme";
 
 const COLORS = ["#10b981", "#ef4444"];
 
+function SuccessFailurePieChartSkeleton() {
+  return (
+    <div className="card h-full flex flex-col">
+      <div className="skeleton h-3 w-36 rounded mb-5" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 py-4">
+        <div className="relative">
+          <div className="skeleton w-44 h-44 rounded-full" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-24 h-24 rounded-full bg-surface-800" />
+          </div>
+        </div>
+        <div className="flex gap-6">
+          <div className="skeleton h-3 w-20 rounded" />
+          <div className="skeleton h-3 w-20 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SuccessFailurePieChart() {
-  const { successFailureData, totalRequests, successRate } = useTelemetry();
+  const { successFailureData, totalRequests, successRate, isLoading } = useTelemetry();
+
+  if (isLoading) return <SuccessFailurePieChartSkeleton />;
 
   return (
     <div className="card h-full flex flex-col">

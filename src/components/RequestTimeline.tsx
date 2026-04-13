@@ -4,8 +4,35 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useTelemetry } from "@/context/TelemetryContext";
 import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS } from "@/lib/chart-theme";
 
+function RequestTimelineSkeleton() {
+  const points = [35, 55, 40, 70, 45, 80, 60, 90, 50, 65];
+  const max = 90;
+  const w = 100 / (points.length - 1);
+  const pts = points.map((y, i) => `${i * w},${100 - (y / max) * 80}`).join(' ');
+  return (
+    <div className="card h-full">
+      <div className="skeleton h-3 w-56 rounded mb-5" />
+      <div className="relative px-2 pt-2" style={{ height: 260 }}>
+        <svg className="w-full h-full opacity-20" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="skGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={`${pts} ${100},100 0,100`} fill="url(#skGrad)" />
+          <polyline points={pts} fill="none" stroke="#3b82f6" strokeWidth="1.5" />
+        </svg>
+        <div className="absolute inset-0 skeleton rounded opacity-30" />
+      </div>
+    </div>
+  );
+}
+
 export default function RequestTimeline() {
-  const { timelineData } = useTelemetry();
+  const { timelineData, isLoading } = useTelemetry();
+
+  if (isLoading) return <RequestTimelineSkeleton />;
 
   return (
     <div className="card h-full">

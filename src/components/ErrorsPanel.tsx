@@ -4,9 +4,9 @@ import { useTelemetry } from "@/context/TelemetryContext";
 import { formatDuration, formatUtcTime } from "@/lib/format";
 
 export default function ErrorsPanel() {
-  const { failedRecords } = useTelemetry();
+  const { failedRecords, isLoading } = useTelemetry();
 
-  if (failedRecords.length === 0) return null;
+  if (isLoading || failedRecords.length === 0) return null;
 
   return (
     <div className="card border-red-900/50">

@@ -6,8 +6,26 @@ import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS } from "@/lib/chart-the
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#06b6d4"];
 
+function OperationsBarChartSkeleton() {
+  return (
+    <div className="card h-full">
+      <div className="skeleton h-3 w-44 rounded mb-5" />
+      <div className="space-y-4 px-2 pt-2">
+        {[72, 90, 55].map((w, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className="skeleton h-3 w-32 rounded flex-shrink-0" />
+            <div className="skeleton h-6 rounded" style={{ width: `${w}%` }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OperationsBarChart() {
-  const { requestsByOperation } = useTelemetry();
+  const { requestsByOperation, isLoading } = useTelemetry();
+
+  if (isLoading) return <OperationsBarChartSkeleton />;
 
   return (
     <div className="card h-full">

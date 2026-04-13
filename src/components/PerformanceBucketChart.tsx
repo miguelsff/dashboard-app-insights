@@ -17,8 +17,27 @@ const BUCKET_COLORS: Record<string, string> = {
   ">=5min": "#991b1b",
 };
 
+function PerformanceBucketChartSkeleton() {
+  const bars = [30, 45, 60, 80, 55, 70, 40, 90];
+  return (
+    <div className="card h-full">
+      <div className="skeleton h-3 w-52 rounded mb-5" />
+      <div className="flex items-end gap-2 px-2 pt-2" style={{ height: 240 }}>
+        {bars.map((h, i) => (
+          <div key={i} className="flex-1 flex flex-col justify-end gap-1">
+            <div className="skeleton rounded-t" style={{ height: `${h}%` }} />
+            <div className="skeleton h-2 w-full rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PerformanceBucketChart() {
-  const { requestsByBucket } = useTelemetry();
+  const { requestsByBucket, isLoading } = useTelemetry();
+
+  if (isLoading) return <PerformanceBucketChartSkeleton />;
 
   return (
     <div className="card h-full">
