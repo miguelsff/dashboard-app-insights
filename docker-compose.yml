@@ -1,0 +1,15 @@
+services:
+  app:
+    image: node:20-alpine
+    working_dir: /app
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - .:/app
+      - /app/node_modules        # volumen anónimo para aislar node_modules del host
+    environment:
+      - PORT=${PORT:-3000}
+      - WATCHPACK_POLLING=true   # necesario en Windows/Docker Desktop para HMR
+    command: sh -c "npm install && npm run dev"
+    env_file:
+      - .env

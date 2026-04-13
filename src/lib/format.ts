@@ -1,0 +1,25 @@
+/**
+ * Formats a duration in milliseconds into a human-readable string.
+ * Uses the smallest unit that keeps one decimal place (m / s / ms).
+ */
+export function formatDuration(ms: number): string {
+  if (ms >= 60000) return `${(ms / 60000).toFixed(1)}m`;
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms}ms`;
+}
+
+/**
+ * Extracts HH:MM:SS from an ISO 8601 UTC string without allocating a Date object.
+ * e.g. "2026-04-13T05:03:39.018Z" → "05:03:39 UTC"
+ */
+export function formatUtcTime(iso: string): string {
+  return `${iso.slice(11, 19)} UTC`;
+}
+
+/**
+ * Extracts HH:MM:SS.mmm from an ISO 8601 UTC string without allocating a Date object.
+ * e.g. "2026-04-13T05:03:39.018Z" → "05:03:39.018"
+ */
+export function formatUtcTimeMs(iso: string): string {
+  return iso.slice(11, 23);
+}

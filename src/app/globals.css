@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface-900 text-gray-100 font-sans;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-800;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-600 rounded;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-800 border border-surface-700 rounded-xl p-5;
+  }
+  .card-title {
+    @apply text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3;
+  }
+  .badge-success {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-medium bg-emerald-900/50 text-emerald-400;
+  }
+  .badge-failure {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-400;
+  }
+}
