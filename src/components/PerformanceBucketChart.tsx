@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { requestsByBucket } from "@/data/telemetry";
+import { useTelemetry } from "@/context/TelemetryContext";
 import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS } from "@/lib/chart-theme";
 
 const BUCKET_COLORS: Record<string, string> = {
@@ -18,6 +18,8 @@ const BUCKET_COLORS: Record<string, string> = {
 };
 
 export default function PerformanceBucketChart() {
+  const { requestsByBucket } = useTelemetry();
+
   return (
     <div className="card h-full">
       <p className="card-title">Performance Bucket Distribution</p>

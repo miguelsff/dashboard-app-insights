@@ -1,12 +1,14 @@
 "use client";
 
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { successFailureData, totalRequests, successRate } from "@/data/telemetry";
+import { useTelemetry } from "@/context/TelemetryContext";
 import { TOOLTIP_STYLE } from "@/lib/chart-theme";
 
 const COLORS = ["#10b981", "#ef4444"];
 
 export default function SuccessFailurePieChart() {
+  const { successFailureData, totalRequests, successRate } = useTelemetry();
+
   return (
     <div className="card h-full flex flex-col">
       <p className="card-title">Success vs Failure</p>

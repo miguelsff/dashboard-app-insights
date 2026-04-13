@@ -477,28 +477,6 @@ export const telemetryData: TelemetryRecord[] = [
   },
 ];
 
-// ── Derived scalars ──────────────────────────────────────────────────────────
-export const totalRequests = telemetryData.length;
-
-export const successCount = telemetryData.filter((r) => r.success).length;
-
-export const failureCount = telemetryData.filter((r) => !r.success).length;
-
-export const avgDuration = Math.round(
-  telemetryData.reduce((sum, r) => sum + r.duration, 0) / totalRequests,
-);
-
-export const successRate = ((successCount / totalRequests) * 100).toFixed(1);
-
-// ── Chart data ───────────────────────────────────────────────────────────────
-export const requestsByOperation = Object.entries(
-  telemetryData.reduce<Record<string, number>>((acc, r) => {
-    const key = r.customDimensions['gen_ai.operation.name'] ?? r.operation_Name;
-    acc[key] = (acc[key] ?? 0) + 1;
-    return acc;
-  }, {}),
-).map(([name, count]) => ({ name, count }));
-
 const BUCKET_ORDER = [
   '<250ms',
   '250ms-500ms',
@@ -512,32 +490,62 @@ const BUCKET_ORDER = [
   '>=5min',
 ];
 
-// Single-pass bucket count — avoids iterating telemetryData once per bucket.
-export const requestsByBucket = (() => {
-  const counts = telemetryData.reduce<Record<string, number>>((acc, r) => {
+export function computeDerived(data: TelemetryRecord[]) {
+  const totalRequests = data.length;
+  const successCount = data.filter((r) => r.success).length;
+  const failureCount = totalRequests - successCount;
+  const avgDuration =
+    totalRequests > 0
+      ? Math.round(data.reduce((sum, r) => sum + r.duration, 0) / totalRequests)
+      : 0;
+  const successRate =
+    totalRequests > 0 ? ((successCount / totalRequests) * 100).toFixed(1) : '0.0';
+
+  const requestsByOperation = Object.entries(
+    data.reduce<Record<string, number>>((acc, r) => {
+      const key = r.customDimensions['gen_ai.operation.name'] ?? r.operation_Name;
+      acc[key] = (acc[key] ?? 0) + 1;
+      return acc;
+    }, {}),
+  ).map(([name, count]) => ({ name, count }));
+
+  const bucketCounts = data.reduce<Record<string, number>>((acc, r) => {
     acc[r.performanceBucket] = (acc[r.performanceBucket] ?? 0) + 1;
     return acc;
   }, {});
-  return BUCKET_ORDER.filter((b) => counts[b]).map((bucket) => ({
+  const requestsByBucket = BUCKET_ORDER.filter((b) => bucketCounts[b]).map((bucket) => ({
     bucket,
-    count: counts[bucket],
+    count: bucketCounts[bucket],
   }));
-})();
 
-export const successFailureData = [
-  { name: 'Success', value: successCount },
-  { name: 'Failure', value: failureCount },
-];
+  const successFailureData = [
+    { name: 'Success', value: successCount },
+    { name: 'Failure', value: failureCount },
+  ];
 
-// ISO 8601 timestamps are lexicographically ordered, so slicing "HH:MM" avoids Date allocation.
-export const timelineData = Object.entries(
-  telemetryData.reduce<Record<string, number>>((acc, r) => {
-    const minute = r.timestamp.slice(11, 16);
-    acc[minute] = (acc[minute] ?? 0) + 1;
-    return acc;
-  }, {}),
-)
-  .sort(([a], [b]) => a.localeCompare(b))
-  .map(([minute, count]) => ({ minute, count }));
+  const timelineData = Object.entries(
+    data.reduce<Record<string, number>>((acc, r) => {
+      const minute = r.timestamp.slice(11, 16);
+      acc[minute] = (acc[minute] ?? 0) + 1;
+      return acc;
+    }, {}),
+  )
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([minute, count]) => ({ minute, count }));
 
-export const failedRecords = telemetryData.filter((r) => !r.success);
+  const failedRecords = data.filter((r) => !r.success);
+
+  return {
+    telemetryData: data,
+    totalRequests,
+    successCount,
+    failureCount,
+    avgDuration,
+    successRate,
+    requestsByOperation,
+    requestsByBucket,
+    successFailureData,
+    timelineData,
+    failedRecords,
+  };
+}

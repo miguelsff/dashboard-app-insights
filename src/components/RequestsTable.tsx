@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { telemetryData } from "@/data/telemetry";
+import { useTelemetry } from "@/context/TelemetryContext";
 import { formatDuration, formatUtcTimeMs } from "@/lib/format";
 
 function shortName(name: string): string {
@@ -10,13 +10,14 @@ function shortName(name: string): string {
     .replace("credicorp-dispatcher.", "");
 }
 
-// ISO 8601 strings are lexicographically ordered — no Date allocation needed.
-const sorted = [...telemetryData].sort((a, b) =>
-  a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
-);
-
 export default function RequestsTable() {
+  const { telemetryData } = useTelemetry();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // ISO 8601 strings are lexicographically ordered — no Date allocation needed.
+  const sorted = [...telemetryData].sort((a, b) =>
+    a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
+  );
 
   function toggle(id: string) {
     setExpanded((prev) => {

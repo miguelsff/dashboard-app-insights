@@ -1,10 +1,12 @@
 "use client";
 
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { timelineData } from "@/data/telemetry";
+import { useTelemetry } from "@/context/TelemetryContext";
 import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS } from "@/lib/chart-theme";
 
 export default function RequestTimeline() {
+  const { timelineData } = useTelemetry();
+
   return (
     <div className="card h-full">
       <p className="card-title">Request Timeline (by UTC minute)</p>

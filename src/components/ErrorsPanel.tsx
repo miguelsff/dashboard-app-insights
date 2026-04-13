@@ -1,7 +1,11 @@
-import { failedRecords } from "@/data/telemetry";
+"use client";
+
+import { useTelemetry } from "@/context/TelemetryContext";
 import { formatDuration, formatUtcTime } from "@/lib/format";
 
 export default function ErrorsPanel() {
+  const { failedRecords } = useTelemetry();
+
   if (failedRecords.length === 0) return null;
 
   return (

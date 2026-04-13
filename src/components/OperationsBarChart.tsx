@@ -1,12 +1,14 @@
 "use client";
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { requestsByOperation } from "@/data/telemetry";
+import { useTelemetry } from "@/context/TelemetryContext";
 import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS } from "@/lib/chart-theme";
 
 const COLORS = ["#3b82f6", "#8b5cf6", "#06b6d4"];
 
 export default function OperationsBarChart() {
+  const { requestsByOperation } = useTelemetry();
+
   return (
     <div className="card h-full">
       <p className="card-title">Requests by Operation</p>
