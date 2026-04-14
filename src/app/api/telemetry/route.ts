@@ -19,7 +19,7 @@ const credential = process.env.IDENTITY_ENDPOINT
 
 const KQL = `
 dependencies
-| where timestamp > ago(24h)
+| where timestamp > ago(7d)
 | order by timestamp desc
 | take 100
 | project timestamp, id, target, type, name, success, resultCode, duration,
@@ -49,10 +49,18 @@ export async function GET() {
   }
 
   const url = `https://api.applicationinsights.io/v1/apps/${appId}/query?query=${encodeURIComponent(KQL)}`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: 'no-store',
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: 'No se pudo conectar con App Insights', detail: String(err) },
+      { status: 503 },
+    );
+  }
 
   if (!res.ok) {
     const body = await res.text();

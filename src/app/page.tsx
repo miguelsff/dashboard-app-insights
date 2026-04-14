@@ -11,26 +11,31 @@ import ErrorsPanel from "@/components/ErrorsPanel";
 import RequestsTable from "@/components/RequestsTable";
 
 function DashboardHeader() {
-  const { totalRequests, lastUpdated, fetchError } = useTelemetry();
+  const { totalRequests, lastUpdated, fetchError, errorMessage } = useTelemetry();
   const updatedLabel = lastUpdated
     ? `Updated ${lastUpdated.toISOString().slice(11, 19)} UTC`
     : "Static snapshot";
 
   return (
-    <header className="flex items-start justify-between gap-4">
+    <header className="flex items-start justify-between gap-4 flex-wrap">
       <div>
         <h1 className="text-2xl font-bold text-white tracking-tight">Application Insights</h1>
         <p className="text-sm text-gray-400 mt-1">
           credicorp-dispatcher-middleware &middot; GenAI Dispatcher Telemetry
         </p>
       </div>
-      <div className="flex items-center gap-2 mt-1">
-        <span
-          className={`w-2 h-2 rounded-full ${fetchError ? "bg-red-400" : "bg-emerald-400 animate-pulse"}`}
-        />
-        <span className="text-xs text-gray-500 font-mono">
-          {updatedLabel} &middot; {totalRequests} records
-        </span>
+      <div className="flex flex-col items-end gap-1 mt-1">
+        <div className="flex items-center gap-2">
+          <span
+            className={`w-2 h-2 rounded-full ${fetchError ? "bg-red-400" : "bg-emerald-400 animate-pulse"}`}
+          />
+          <span className="text-xs text-gray-500 font-mono">
+            {updatedLabel} &middot; {totalRequests} records
+          </span>
+        </div>
+        {fetchError && errorMessage && (
+          <span className="text-xs text-red-400 font-mono">{errorMessage}</span>
+        )}
       </div>
     </header>
   );

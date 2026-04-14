@@ -9,6 +9,7 @@ type Derived = ReturnType<typeof computeDerived>;
 interface TelemetryContextValue extends Derived {
   lastUpdated: Date | null;
   fetchError: boolean;
+  errorMessage: string | null;
   isLoading: boolean;
 }
 
@@ -21,6 +22,7 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     ...computeDerived([]),
     lastUpdated: null,
     fetchError: false,
+    errorMessage: null,
     isLoading: true,
   });
 
@@ -28,11 +30,15 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     async function fetchData() {
       try {
         const res = await fetch('/api/telemetry');
-        if (!res.ok) throw new Error(`${res.status}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({})) as { error?: string };
+          throw new Error(body.error ?? `HTTP ${res.status}`);
+        }
         const records: TelemetryRecord[] = await res.json();
-        setState({ ...computeDerived(records), lastUpdated: new Date(), fetchError: false, isLoading: false });
-      } catch {
-        setState((prev) => ({ ...prev, fetchError: true, isLoading: false }));
+        setState({ ...computeDerived(records), lastUpdated: new Date(), fetchError: false, errorMessage: null, isLoading: false });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Error desconocido';
+        setState((prev) => ({ ...prev, fetchError: true, errorMessage: msg, isLoading: false }));
       }
     }
 
