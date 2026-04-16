@@ -68,3 +68,19 @@
     @apply font-mono text-[11px] leading-relaxed bg-surface-900 rounded-lg p-3 max-h-48 overflow-auto text-gray-300 whitespace-pre-wrap break-all;
   }
 }
+
+/* React Flow dark theme overrides */
+.workflow-graph .react-flow__node {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+.workflow-graph .react-flow__handle {
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.workflow-graph .react-flow__attribution {
+  display: none;
+}

@@ -11,6 +11,7 @@ import {
 import TraceDetailHeader from "@/components/trace-detail/TraceDetailHeader";
 import TraceKpiCards from "@/components/trace-detail/TraceKpiCards";
 import TraceMetadataPanel from "@/components/trace-detail/TraceMetadataPanel";
+import WorkflowGraph from "@/components/trace-detail/WorkflowGraph";
 import SpanWaterfall from "@/components/trace-detail/SpanWaterfall";
 import LlmTokensChart from "@/components/trace-detail/LlmTokensChart";
 import ToolCallsTable from "@/components/trace-detail/ToolCallsTable";
@@ -73,6 +74,7 @@ export default function TraceDetailPage() {
       <TraceDetailHeader trace={trace} />
       <TraceKpiCards kpis={derived.kpis} />
       <TraceMetadataPanel metadata={derived.metadata} />
+      <WorkflowGraph spans={trace.spans} workflowDefinitionJson={derived.metadata.workflowDefinition} />
       <SpanWaterfall tree={derived.tree} traceDurationMs={trace.durationMs} />
       <LlmTokensChart data={derived.llmTokens} />
       <ToolCallsTable rows={derived.toolCalls} />

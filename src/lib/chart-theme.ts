@@ -49,6 +49,16 @@ export const MODEL_COLORS: Record<string, string> = {
   'gpt-4': '#f59e0b',
 };
 
+export const WORKFLOW_GRAPH_COLORS = {
+  executedNode: '#4A90D9',
+  nonExecutedNode: '#374151',
+  executedEdge: '#4A90D9',
+  nonExecutedEdge: '#6B7280',
+  startNodeRing: '#34d399',
+  nodeText: '#F3F4F6',
+  nodeSubtext: '#9CA3AF',
+} as const;
+
 export const WATERFALL_COLORS: Record<string, string> = {
   chat: '#4A90D9',
   execute_tool: '#E8A838',

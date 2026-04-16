@@ -112,8 +112,7 @@ export default function TraceTable() {
                   <th className="pb-2 pr-3 font-medium">Tokens</th>
                   <th className="pb-2 pr-3 font-medium">Modelos</th>
                   <th className="pb-2 pr-3 font-medium">Agentes</th>
-                  <th className="pb-2 pr-3 font-medium">Estado</th>
-                  <th className="pb-2 font-medium">Link</th>
+                  <th className="pb-2 font-medium">Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -153,18 +152,8 @@ export default function TraceTable() {
                         {t.agents.map(a => <span key={a} className="badge-agent">{a}</span>)}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3">
-                      <StatusBadge status={t.status} />
-                    </td>
                     <td className="py-2.5">
-                      {t.traceLink ? (
-                        <span className="flex items-center">
-                          <span className="font-mono text-xs text-gray-400">{t.traceLink.slice(0, 8)}</span>
-                          <CopyButton text={t.traceLink} />
-                        </span>
-                      ) : (
-                        <span className="text-gray-700">—</span>
-                      )}
+                      <StatusBadge status={t.status} />
                     </td>
                   </tr>
                 ))}
