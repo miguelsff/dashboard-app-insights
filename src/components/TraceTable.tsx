@@ -2,202 +2,204 @@
 
 import { useState } from "react";
 import { useTelemetry } from "@/context/TelemetryContext";
-import { formatDuration, formatUtcTime } from "@/lib/format";
-import { categorizeSpan } from "@/data/telemetry";
-import { CATEGORY_COLORS } from "@/lib/chart-theme";
-import type { Trace, TelemetryRecord } from "@/types/telemetry";
+import { formatDuration, formatUtcTimeMs, formatTokenCount } from "@/lib/format";
+import type { EnhancedTrace } from "@/types/telemetry";
 
-type SortKey = 'newest' | 'oldest' | 'slowest' | 'mostSpans';
+const PAGE_SIZE = 20;
 
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'newest',    label: 'Newest' },
-  { key: 'oldest',   label: 'Oldest' },
-  { key: 'slowest',  label: 'Slowest' },
-  { key: 'mostSpans', label: 'Most Spans' },
-];
+type SortKey = "newest" | "oldest" | "slowest" | "mostSpans";
 
-function sortTraces(traces: Trace[], key: SortKey): Trace[] {
-  const copy = [...traces];
+function sortTraces(traces: EnhancedTrace[], key: SortKey): EnhancedTrace[] {
+  const sorted = [...traces];
   switch (key) {
-    case 'newest':    return copy.sort((a, b) => b.startTime.localeCompare(a.startTime));
-    case 'oldest':    return copy.sort((a, b) => a.startTime.localeCompare(b.startTime));
-    case 'slowest':   return copy.sort((a, b) => b.durationMs - a.durationMs);
-    case 'mostSpans': return copy.sort((a, b) => b.spanCount - a.spanCount);
+    case "newest":  return sorted.sort((a, b) => b.startTime.localeCompare(a.startTime));
+    case "oldest":  return sorted.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    case "slowest": return sorted.sort((a, b) => b.durationMs - a.durationMs);
+    case "mostSpans": return sorted.sort((a, b) => b.spanCount - a.spanCount);
   }
 }
 
-function SpanRow({ span, depth = 0 }: { span: TelemetryRecord; depth?: number }) {
-  const cat   = categorizeSpan(span);
-  const color = CATEGORY_COLORS[cat];
-  const label = cat.toUpperCase();
-
-  return (
-    <tr className="border-t border-surface-700/40 hover:bg-surface-800/50">
-      <td className="py-1.5 px-3" style={{ paddingLeft: `${12 + depth * 16}px` }}>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
-          <span className="text-xs text-gray-300 truncate max-w-[200px]" title={span.target}>
-            {span.target || '—'}
-          </span>
-          <span className="text-[10px] px-1 rounded" style={{ color, background: `${color}22` }}>
-            {label}
-          </span>
-        </div>
-      </td>
-      <td className="py-1.5 px-3 text-xs text-gray-500">{formatUtcTime(span.timestamp)}</td>
-      <td className="py-1.5 px-3 text-xs text-gray-400">{formatDuration(span.duration)}</td>
-      <td className="py-1.5 px-3">
-        {span.itemType === 'exception' ? (
-          <span className="badge-failure">exception</span>
-        ) : (
-          <span className="text-xs text-gray-600">{span.itemType}</span>
-        )}
-      </td>
-      <td className="py-1.5 px-3 text-xs text-gray-600">
-        {span.customDimensions['otel.status_code']?.replace('STATUS_CODE_', '') ?? '—'}
-      </td>
-    </tr>
-  );
+function DurationBadge({ ms }: { ms: number }) {
+  const color = ms > 15000 ? "text-red-400" : ms > 5000 ? "text-yellow-400" : "text-emerald-400";
+  return <span className={`font-mono text-xs ${color}`}>{formatDuration(ms)}</span>;
 }
 
-function TraceRow({ trace, index }: { trace: Trace; index: number }) {
-  const [expanded, setExpanded] = useState(false);
+function StatusBadge({ status }: { status: "ok" | "error" | "unset" }) {
+  if (status === "ok") return <span className="badge-success">OK</span>;
+  if (status === "error") return <span className="badge-failure">ERROR</span>;
+  return <span className="badge-neutral">UNSET</span>;
+}
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   return (
-    <>
-      <tr
-        className="border-t border-surface-700 hover:bg-surface-800 cursor-pointer"
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <td className="py-2 px-3 text-xs text-gray-600">{index + 1}</td>
-        <td className="py-2 px-3 text-xs text-gray-400 font-mono">{formatUtcTime(trace.startTime)}</td>
-        <td className="py-2 px-3 text-xs text-gray-500 font-mono" title={trace.traceId}>
-          {trace.traceId.slice(0, 8)}…
-        </td>
-        <td className="py-2 px-3 text-xs text-gray-200 truncate max-w-[180px]" title={trace.operationName}>
-          {trace.operationName}
-        </td>
-        <td className="py-2 px-3">
-          <span className={trace.success ? 'badge-success' : 'badge-failure'}>
-            {trace.success ? 'ok' : 'fail'}
-          </span>
-        </td>
-        <td className="py-2 px-3 text-xs text-yellow-300">{formatDuration(trace.durationMs)}</td>
-        <td className="py-2 px-3 text-xs text-gray-400 text-center">{trace.spanCount}</td>
-        <td className="py-2 px-3 text-xs text-violet-300 text-center">{trace.llmCallCount || '—'}</td>
-        <td className="py-2 px-3 text-xs text-cyan-300 text-center">{trace.toolCallCount || '—'}</td>
-        <td className="py-2 px-3 text-gray-500">
-          <svg
-            className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </td>
-      </tr>
-
-      {expanded && (
-        <tr>
-          <td colSpan={10} className="p-0">
-            <div className="bg-surface-900 border-b border-surface-700">
-              {trace.failureReason && (
-                <div className="px-4 py-2 text-xs text-red-300 bg-red-500/5 border-b border-red-500/10">
-                  Error: {trace.failureReason}
-                </div>
-              )}
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-surface-700/40">
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Span</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Time</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Duration</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Type</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">OTel Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trace.spans.map((span) => (
-                    <SpanRow key={span.id} span={span} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
+    <button onClick={handleCopy} className="ml-1 text-gray-500 hover:text-gray-300" title="Copy full ID">
+      {copied ? (
+        <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
       )}
-    </>
+    </button>
   );
 }
 
 export default function TraceTable() {
-  const { traces, isLoading } = useTelemetry();
-  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const { enhancedTraces, isLoading } = useTelemetry();
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [page, setPage] = useState(0);
 
   if (isLoading) {
     return (
       <div className="card">
-        <p className="card-title mb-4">Traces</p>
+        <h3 className="card-title">Trazas Recientes</h3>
         <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton h-9 rounded" />
-          ))}
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton h-10 rounded" />)}
         </div>
       </div>
     );
   }
 
-  const sorted = sortTraces(traces, sortKey);
+  const sorted = sortTraces(enhancedTraces, sort);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
-    <div className="card overflow-hidden">
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <p className="card-title">Traces ({traces.length})</p>
+    <div className="card">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 className="card-title mb-0">Trazas Recientes</h3>
         <div className="flex gap-1">
-          {SORT_OPTIONS.map((opt) => (
+          {(["newest", "oldest", "slowest", "mostSpans"] as SortKey[]).map((key) => (
             <button
-              key={opt.key}
-              onClick={() => setSortKey(opt.key)}
-              className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                sortKey === opt.key
-                  ? 'bg-azure-600 text-white'
-                  : 'border border-surface-700 text-gray-400 hover:bg-surface-700'
+              key={key}
+              onClick={() => { setSort(key); setPage(0); }}
+              className={`px-2.5 py-1 rounded text-xs transition-colors ${
+                sort === key
+                  ? "bg-azure-500/20 text-azure-400"
+                  : "text-gray-500 hover:text-gray-300 hover:bg-surface-700"
               }`}
             >
-              {opt.label}
+              {key === "newest" ? "Newest" : key === "oldest" ? "Oldest" : key === "slowest" ? "Slowest" : "Most Spans"}
             </button>
           ))}
         </div>
       </div>
 
-      {traces.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-8">No traces found for this period.</p>
+      {sorted.length === 0 ? (
+        <p className="text-sm text-gray-500">No traces in this period</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
-            <thead className="sticky top-0 bg-surface-800 z-10">
-              <tr className="border-b border-surface-700">
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium w-8">#</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium">Start (UTC)</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium">Trace ID</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium">Operation</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium">Status</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-left font-medium">Duration</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-center font-medium">Spans</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-center font-medium">LLM</th>
-                <th className="py-2 px-3 text-[10px] text-gray-500 text-center font-medium">Tools</th>
-                <th className="py-2 px-3 w-6" />
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((trace, i) => (
-                <TraceRow key={trace.traceId} trace={trace} index={i} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-left text-gray-500 border-b border-surface-700">
+                  <th className="pb-2 pr-3 font-medium">Timestamp</th>
+                  <th className="pb-2 pr-3 font-medium">Trace ID</th>
+                  <th className="pb-2 pr-3 font-medium">Session ID</th>
+                  <th className="pb-2 pr-3 font-medium">Version</th>
+                  <th className="pb-2 pr-3 font-medium">Duración</th>
+                  <th className="pb-2 pr-3 font-medium text-center"># Spans</th>
+                  <th className="pb-2 pr-3 font-medium">Tokens</th>
+                  <th className="pb-2 pr-3 font-medium">Modelos</th>
+                  <th className="pb-2 pr-3 font-medium">Agentes</th>
+                  <th className="pb-2 pr-3 font-medium">Estado</th>
+                  <th className="pb-2 font-medium">Link</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((t) => (
+                  <tr key={t.traceId} className="border-b border-surface-700/50 hover:bg-surface-700/30 transition-colors">
+                    <td className="py-2.5 pr-3 font-mono text-gray-300 whitespace-nowrap">
+                      {formatUtcTimeMs(t.startTime)}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span className="flex items-center">
+                        <span className="font-mono text-gray-300">{t.traceId.slice(0, 16)}</span>
+                        <CopyButton text={t.traceId} />
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3 font-mono text-gray-500">
+                      {t.sessionId ? t.sessionId.slice(0, 8) : "—"}
+                    </td>
+                    <td className="py-2.5 pr-3 text-gray-400">
+                      {t.agentVersion ?? "—"}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <DurationBadge ms={t.durationMs} />
+                    </td>
+                    <td className="py-2.5 pr-3 text-center text-gray-400">{t.spanCount}</td>
+                    <td className="py-2.5 pr-3 font-mono text-gray-400 whitespace-nowrap">
+                      {formatTokenCount(t.totalInputTokens)} / {formatTokenCount(t.totalOutputTokens)}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span className="flex flex-wrap gap-1">
+                        {t.models.map(m => <span key={m} className="badge-model">{m}</span>)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span className="flex flex-wrap gap-1">
+                        {t.agents.map(a => <span key={a} className="badge-agent">{a}</span>)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <StatusBadge status={t.status} />
+                    </td>
+                    <td className="py-2.5">
+                      {t.traceLink ? (
+                        <a
+                          href={t.traceLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-azure-400 hover:text-azure-300"
+                          title="External trace link"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      ) : (
+                        <span className="text-gray-700">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-surface-700">
+              <span className="text-xs text-gray-500">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, sorted.length)} of {sorted.length}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="px-2.5 py-1 rounded text-xs text-gray-400 hover:bg-surface-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="px-2.5 py-1 rounded text-xs text-gray-400 hover:bg-surface-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,8 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import type { DateRange, TelemetryApiResponse } from '@/types/telemetry';
-import { computeDerived } from '@/data/telemetry';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { DateRange, GlobalFilters, FilterOptions, TelemetryApiResponse, TelemetryRecord } from '@/types/telemetry';
+import { computeDerived, extractFilterOptions, applyGlobalFilters } from '@/data/telemetry';
 
 type Derived = ReturnType<typeof computeDerived>;
 
@@ -14,11 +14,18 @@ interface TelemetryContextValue extends Derived {
   truncated: boolean;
   dateRange: DateRange;
   setDateRange: (r: DateRange) => void;
+  filters: GlobalFilters;
+  setFilters: (f: GlobalFilters) => void;
+  filterOptions: FilterOptions;
 }
 
 const TelemetryContext = createContext<TelemetryContextValue | null>(null);
 
 const POLL_INTERVAL_MS = 30_000;
+
+const EMPTY_FILTERS: GlobalFilters = {
+  models: [], agents: [], services: [], agentVersion: null, status: null,
+};
 
 function defaultRange(): DateRange {
   const end   = new Date();
@@ -28,9 +35,15 @@ function defaultRange(): DateRange {
 
 export function TelemetryProvider({ children }: { children: React.ReactNode }) {
   const [dateRange, setDateRange] = useState<DateRange>(defaultRange);
-
-  const [state, setState] = useState<Omit<TelemetryContextValue, 'dateRange' | 'setDateRange'>>({
-    ...computeDerived([]),
+  const [filters, setFilters] = useState<GlobalFilters>(EMPTY_FILTERS);
+  const [rawRecords, setRawRecords] = useState<TelemetryRecord[]>([]);
+  const [meta, setMeta] = useState<{
+    lastUpdated: Date | null;
+    fetchError: boolean;
+    errorMessage: string | null;
+    isLoading: boolean;
+    truncated: boolean;
+  }>({
     lastUpdated: null,
     fetchError: false,
     errorMessage: null,
@@ -38,7 +51,6 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     truncated: false,
   });
 
-  // Keep a ref so the interval callback always sees the latest dateRange
   const dateRangeRef = useRef(dateRange);
   dateRangeRef.current = dateRange;
 
@@ -53,24 +65,24 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
       }
       const json: TelemetryApiResponse = await res.json();
       if (cancelled.value) return;
-      setState({
-        ...computeDerived(json.records),
-        truncated: json.truncated,
+      setRawRecords(json.records);
+      setMeta({
         lastUpdated: new Date(),
         fetchError: false,
         errorMessage: null,
         isLoading: false,
+        truncated: json.truncated,
       });
     } catch (err) {
       if (cancelled.value) return;
       const msg = err instanceof Error ? err.message : 'Error desconocido';
-      setState((prev) => ({ ...prev, fetchError: true, errorMessage: msg, isLoading: false }));
+      setMeta(prev => ({ ...prev, fetchError: true, errorMessage: msg, isLoading: false }));
     }
   }, []);
 
   useEffect(() => {
     const cancelled = { value: false };
-    setState((prev) => ({ ...prev, isLoading: true }));
+    setMeta(prev => ({ ...prev, isLoading: true }));
     fetchData(cancelled);
     const id = setInterval(() => fetchData(cancelled), POLL_INTERVAL_MS);
     return () => {
@@ -79,10 +91,24 @@ export function TelemetryProvider({ children }: { children: React.ReactNode }) {
     };
   }, [dateRange, fetchData]);
 
+  const unfilteredFilterOptions = useMemo(
+    () => extractFilterOptions(rawRecords),
+    [rawRecords],
+  );
+
+  const derived = useMemo(() => {
+    const filtered = applyGlobalFilters(rawRecords, filters);
+    return computeDerived(filtered);
+  }, [rawRecords, filters]);
+
   const value: TelemetryContextValue = {
-    ...state,
+    ...derived,
+    ...meta,
     dateRange,
     setDateRange,
+    filters,
+    setFilters,
+    filterOptions: unfilteredFilterOptions,
   };
 
   return <TelemetryContext.Provider value={value}>{children}</TelemetryContext.Provider>;

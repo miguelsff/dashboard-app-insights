@@ -37,16 +37,14 @@ function splitRows(text: string): string[] {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (ch === '"') {
+      current += ch;
       if (inQuote && text[i + 1] === '"') {
-        // Escaped quote inside quoted field
         current += '"';
         i++;
       } else {
         inQuote = !inQuote;
-        current += ch;
       }
     } else if ((ch === '\n' || ch === '\r') && !inQuote) {
-      // Skip \r in \r\n sequences
       if (ch === '\r' && text[i + 1] === '\n') i++;
       rows.push(current);
       current = '';

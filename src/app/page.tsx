@@ -2,13 +2,15 @@
 
 import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
 import DateRangePicker from "@/components/DateRangePicker";
+import GlobalFilters from "@/components/GlobalFilters";
 import KpiCards from "@/components/KpiCards";
-import TraceTimelineChart from "@/components/TraceTimelineChart";
-import SpanCategoryChart from "@/components/SpanCategoryChart";
-import ToolUsageChart from "@/components/ToolUsageChart";
-import ErrorRateTrendChart from "@/components/ErrorRateTrendChart";
-import SlowestTracesCard from "@/components/SlowestTracesCard";
-import FailedTracesPanel from "@/components/FailedTracesPanel";
+import LatencyTimeSeriesChart from "@/components/LatencyTimeSeriesChart";
+import FinishReasonsChart from "@/components/FinishReasonsChart";
+import TokensByDayChart from "@/components/TokensByDayChart";
+import CostByModelChart from "@/components/CostByModelChart";
+import AgentInvocationsChart from "@/components/AgentInvocationsChart";
+import StageDurationChart from "@/components/StageDurationChart";
+import LlmVsOrchestrationChart from "@/components/LlmVsOrchestrationChart";
 import TraceTable from "@/components/TraceTable";
 
 function DashboardHeader() {
@@ -20,7 +22,7 @@ function DashboardHeader() {
   return (
     <header className="flex items-start justify-between gap-4 flex-wrap">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">LLM Agent Telemetry</h1>
+        <h1 className="text-2xl font-bold text-white tracking-tight">Agent Traces — Overview</h1>
         <p className="text-sm text-gray-400 mt-1">Trace-level analysis &middot; Azure Application Insights</p>
       </div>
       <div className="flex flex-col items-end gap-1 mt-1">
@@ -44,26 +46,37 @@ export default function DashboardPage() {
       <main className="max-w-screen-2xl mx-auto px-4 py-8 space-y-5">
         <DashboardHeader />
         <DateRangePicker />
+        <GlobalFilters />
         <KpiCards />
 
+        {/* Row 2: Latency + Finish Reasons */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div className="lg:col-span-2">
-            <TraceTimelineChart />
+            <LatencyTimeSeriesChart />
           </div>
-          <SpanCategoryChart />
+          <FinishReasonsChart />
         </div>
 
+        {/* Row 3: Tokens + Cost */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <ToolUsageChart />
-          <ErrorRateTrendChart />
+          <TokensByDayChart />
+          <CostByModelChart />
         </div>
 
-        <SlowestTracesCard />
-        <FailedTracesPanel />
+        {/* Row 4: Agents + Stage Duration */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <AgentInvocationsChart />
+          <StageDurationChart />
+        </div>
+
+        {/* Row 5: LLM vs Orchestration */}
+        <LlmVsOrchestrationChart />
+
+        {/* Trace Table */}
         <TraceTable />
 
         <footer className="text-center text-xs text-gray-700 py-4">
-          Azure Application Insights · LLM Agent Telemetry Dashboard
+          Azure Application Insights · Agent Traces Dashboard
         </footer>
       </main>
     </TelemetryProvider>

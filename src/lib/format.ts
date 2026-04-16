@@ -23,3 +23,20 @@ export function formatUtcTime(iso: string): string {
 export function formatUtcTimeMs(iso: string): string {
   return iso.slice(11, 23);
 }
+
+export function formatCurrency(usd: number): string {
+  if (usd < 0.01 && usd > 0) {
+    return `$${usd.toFixed(4)}`;
+  }
+  return `$${usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+}
+
+export function formatPercent(p: number): string {
+  return `${p.toFixed(1)}%`;
+}

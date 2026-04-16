@@ -1,4 +1,12 @@
-import type { SpanCategory, Trace, TraceKpis, TelemetryRecord } from '@/types/telemetry';
+import type {
+  SpanCategory, Trace, TraceKpis, TelemetryRecord,
+  GlobalFilters, FilterOptions, ParsedAdditionalProperties,
+  Vista1Kpis, EnhancedTrace,
+  LatencyTimePoint, FinishReasonDatum, TokensByDayDatum,
+  CostByModelDatum, AgentInvocationDatum, StageDurationDatum,
+  LlmVsOrchestrationDatum,
+} from '@/types/telemetry';
+import { estimateCost } from '@/lib/pricing';
 
 export function categorizeSpan(r: TelemetryRecord): SpanCategory {
   const op = (r.customDimensions['gen_ai.operation.name'] ?? '').toLowerCase();
@@ -221,21 +229,336 @@ export function toolUsageBreakdown(
     .slice(0, 10);
 }
 
+// ── Vista 1 helpers ──────────────────────────────────────────────────────
+
+function isNullish(v: string | undefined): boolean {
+  return !v || v === 'null';
+}
+
+export function parseAdditionalProperties(raw: string | undefined): ParsedAdditionalProperties {
+  if (isNullish(raw)) return {};
+  const result: ParsedAdditionalProperties = {};
+  for (const pair of raw!.split(',')) {
+    const colonIdx = pair.indexOf(':');
+    if (colonIdx > 0) {
+      result[pair.slice(0, colonIdx).trim()] = pair.slice(colonIdx + 1).trim();
+    }
+  }
+  return result;
+}
+
+export function extractFilterOptions(records: TelemetryRecord[]): FilterOptions {
+  const models = new Set<string>();
+  const agents = new Set<string>();
+  const services = new Set<string>();
+  const versions = new Set<string>();
+  const statuses = new Set<string>();
+
+  for (const r of records) {
+    const cd = r.customDimensions;
+    if (!isNullish(cd['gen_ai.request.model'])) models.add(cd['gen_ai.request.model']!);
+    if (!isNullish(cd['gen_ai.agent.name'])) agents.add(cd['gen_ai.agent.name']!);
+    if (!isNullish(cd['custom_attrs.service_name'])) services.add(cd['custom_attrs.service_name']!);
+    const props = parseAdditionalProperties(cd['custom_attrs.additional_properties']);
+    if (props.AGENT_VERSION) versions.add(props.AGENT_VERSION);
+    const status = cd['otel.status_code'];
+    if (status) statuses.add(status);
+  }
+
+  return {
+    models: Array.from(models).sort(),
+    agents: Array.from(agents).sort(),
+    services: Array.from(services).sort(),
+    agentVersions: Array.from(versions).sort(),
+    statuses: Array.from(statuses).sort(),
+  };
+}
+
+export function applyGlobalFilters(records: TelemetryRecord[], filters: GlobalFilters): TelemetryRecord[] {
+  return records.filter((r) => {
+    const cd = r.customDimensions;
+    if (filters.models.length > 0) {
+      const model = cd['gen_ai.request.model'];
+      if (!isNullish(model) && !filters.models.includes(model!)) return false;
+    }
+    if (filters.agents.length > 0) {
+      const agent = cd['gen_ai.agent.name'];
+      if (!isNullish(agent) && !filters.agents.includes(agent!)) return false;
+    }
+    if (filters.services.length > 0) {
+      const svc = cd['custom_attrs.service_name'];
+      if (!isNullish(svc) && !filters.services.includes(svc!)) return false;
+    }
+    if (filters.agentVersion) {
+      const props = parseAdditionalProperties(cd['custom_attrs.additional_properties']);
+      if (props.AGENT_VERSION && props.AGENT_VERSION !== filters.agentVersion) return false;
+    }
+    if (filters.status) {
+      const status = cd['otel.status_code'] ?? '';
+      if (status && status !== filters.status) return false;
+    }
+    return true;
+  });
+}
+
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (p / 100) * (sorted.length - 1);
+  const lower = Math.floor(idx);
+  const upper = Math.ceil(idx);
+  if (lower === upper) return sorted[lower];
+  return sorted[lower] + (sorted[upper] - sorted[lower]) * (idx - lower);
+}
+
+export function computeVista1Kpis(traces: Trace[], records: TelemetryRecord[]): Vista1Kpis {
+  const e2eDurations = records
+    .filter(r => r.target === 'genai.http POST /api/chat')
+    .map(r => r.duration);
+
+  let totalInput = 0;
+  let totalOutput = 0;
+  const modelTokens: Record<string, { input: number; output: number }> = {};
+
+  for (const r of records) {
+    if (categorizeSpan(r) === 'llm') {
+      const inp = parseInt(r.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
+      const out = parseInt(r.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
+      totalInput += inp;
+      totalOutput += out;
+      const model = r.customDimensions['gen_ai.request.model'] ?? 'unknown';
+      if (!modelTokens[model]) modelTokens[model] = { input: 0, output: 0 };
+      modelTokens[model].input += inp;
+      modelTokens[model].output += out;
+    }
+  }
+
+  let totalCost = 0;
+  for (const [model, tokens] of Object.entries(modelTokens)) {
+    totalCost += estimateCost(model, tokens.input, tokens.output);
+  }
+
+  const toolSpans = records.filter(r => categorizeSpan(r) === 'tool');
+  const toolErrors = toolSpans.filter(r =>
+    r.customDimensions['otel.status_code'] === 'STATUS_CODE_ERROR' || r.itemType === 'exception',
+  );
+  const toolSuccessRate = toolSpans.length > 0
+    ? ((toolSpans.length - toolErrors.length) / toolSpans.length) * 100
+    : 100;
+
+  return {
+    totalTraces: traces.length,
+    e2eDurationP50Ms: percentile(e2eDurations, 50),
+    e2eDurationP95Ms: percentile(e2eDurations, 95),
+    totalInputTokens: totalInput,
+    totalOutputTokens: totalOutput,
+    estimatedCostUsd: totalCost,
+    toolCallSuccessRate: toolSuccessRate,
+    toolCallTotal: toolSpans.length,
+    toolCallSuccess: toolSpans.length - toolErrors.length,
+  };
+}
+
+export function computeEnhancedTraces(traces: Trace[]): EnhancedTrace[] {
+  return traces.map(t => {
+    const modelsSet = new Set<string>();
+    const agentsSet = new Set<string>();
+    let sessionId: string | null = null;
+    let agentVersion: string | null = null;
+    let traceLink: string | null = null;
+    let hasError = false;
+    let hasOk = false;
+
+    for (const s of t.spans) {
+      const cd = s.customDimensions;
+      if (!isNullish(cd['gen_ai.request.model'])) modelsSet.add(cd['gen_ai.request.model']!);
+      if (!isNullish(cd['gen_ai.agent.name'])) agentsSet.add(cd['gen_ai.agent.name']!);
+      if (!sessionId && !isNullish(cd['custom_attrs.session_id'])) sessionId = cd['custom_attrs.session_id']!;
+      if (!agentVersion) {
+        const props = parseAdditionalProperties(cd['custom_attrs.additional_properties']);
+        if (props.AGENT_VERSION) agentVersion = props.AGENT_VERSION;
+      }
+      if (!traceLink && !isNullish(cd['custom_attrs.trace_link'])) traceLink = cd['custom_attrs.trace_link']!;
+      if (cd['otel.status_code'] === 'STATUS_CODE_ERROR') hasError = true;
+      if (cd['otel.status_code'] === 'STATUS_CODE_OK') hasOk = true;
+    }
+
+    const status: 'ok' | 'error' | 'unset' = hasError ? 'error' : hasOk ? 'ok' : 'unset';
+
+    return { ...t, sessionId, agentVersion, models: Array.from(modelsSet), agents: Array.from(agentsSet), traceLink, status };
+  });
+}
+
+export function computeLatencyTimeSeries(records: TelemetryRecord[]): LatencyTimePoint[] {
+  const byDay = new Map<string, number[]>();
+  for (const r of records) {
+    if (r.target !== 'genai.http POST /api/chat') continue;
+    const day = r.timestamp.slice(0, 10);
+    const list = byDay.get(day) ?? [];
+    list.push(r.duration);
+    byDay.set(day, list);
+  }
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, durations]) => ({
+      day,
+      p50Ms: Math.round(percentile(durations, 50)),
+      p95Ms: Math.round(percentile(durations, 95)),
+    }));
+}
+
+export function computeFinishReasons(records: TelemetryRecord[]): FinishReasonDatum[] {
+  const counts = new Map<string, number>();
+  for (const r of records) {
+    if (categorizeSpan(r) !== 'llm') continue;
+    const raw = r.customDimensions['gen_ai.response.finish_reasons'];
+    if (isNullish(raw)) continue;
+    try {
+      const arr = JSON.parse(raw!) as string[];
+      for (const reason of arr) {
+        counts.set(reason, (counts.get(reason) ?? 0) + 1);
+      }
+    } catch {
+      counts.set(raw!, (counts.get(raw!) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export function computeTokensByDay(records: TelemetryRecord[]): TokensByDayDatum[] {
+  const byDay = new Map<string, { input: number; output: number }>();
+  for (const r of records) {
+    if (categorizeSpan(r) !== 'llm') continue;
+    const day = r.timestamp.slice(0, 10);
+    const entry = byDay.get(day) ?? { input: 0, output: 0 };
+    entry.input += parseInt(r.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
+    entry.output += parseInt(r.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
+    byDay.set(day, entry);
+  }
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([day, { input, output }]) => ({ day, inputTokens: input, outputTokens: output }));
+}
+
+export function computeCostByModel(records: TelemetryRecord[]): CostByModelDatum[] {
+  const byModel = new Map<string, { input: number; output: number }>();
+  for (const r of records) {
+    if (categorizeSpan(r) !== 'llm') continue;
+    const model = r.customDimensions['gen_ai.request.model'] ?? 'unknown';
+    const entry = byModel.get(model) ?? { input: 0, output: 0 };
+    entry.input += parseInt(r.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
+    entry.output += parseInt(r.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
+    byModel.set(model, entry);
+  }
+  return Array.from(byModel.entries()).map(([model, tokens]) => ({
+    model,
+    costInput: estimateCost(model, tokens.input, 0),
+    costOutput: estimateCost(model, 0, tokens.output),
+  }));
+}
+
+export function computeAgentInvocations(records: TelemetryRecord[]): AgentInvocationDatum[] {
+  const byAgent = new Map<string, { count: number; totalDuration: number }>();
+  for (const r of records) {
+    const op = r.customDimensions['gen_ai.operation.name'];
+    if (op !== 'invoke_agent') continue;
+    const agent = r.customDimensions['gen_ai.agent.name'] ?? r.target.replace(/^invoke_agent\s+/i, '') ?? 'unknown';
+    const entry = byAgent.get(agent) ?? { count: 0, totalDuration: 0 };
+    entry.count++;
+    entry.totalDuration += r.duration;
+    byAgent.set(agent, entry);
+  }
+  return Array.from(byAgent.entries())
+    .map(([agent, { count, totalDuration }]) => ({
+      agent,
+      count,
+      avgDurationMs: Math.round(totalDuration / count),
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export function computeAvgDurationByStage(records: TelemetryRecord[]): StageDurationDatum[] {
+  const byStage = new Map<string, { total: number; count: number }>();
+  for (const r of records) {
+    const op = r.customDimensions['gen_ai.operation.name'];
+    let stage: string;
+    if (op === 'chat') stage = 'chat (LLM)';
+    else if (op === 'execute_tool') stage = 'execute_tool';
+    else if (op === 'invoke_agent') stage = 'invoke_agent';
+    else {
+      const t = r.target.toLowerCase();
+      if (t.startsWith('workflow.')) stage = r.target.split(' ')[0];
+      else if (t.startsWith('executor.')) stage = 'executor.process';
+      else if (t.startsWith('edge_group.')) stage = 'edge_group.process';
+      else if (t.startsWith('message.')) stage = 'message.send';
+      else if (t.startsWith('genai.http')) stage = 'genai.http (E2E)';
+      else if (t.includes('.e2e')) stage = 'e2e';
+      else continue;
+    }
+    const entry = byStage.get(stage) ?? { total: 0, count: 0 };
+    entry.total += r.duration;
+    entry.count++;
+    byStage.set(stage, entry);
+  }
+  return Array.from(byStage.entries())
+    .map(([stage, { total, count }]) => ({
+      stage,
+      avgDurationMs: Math.round(total / count),
+    }))
+    .sort((a, b) => b.avgDurationMs - a.avgDurationMs);
+}
+
+export function computeLlmVsOrchestration(records: TelemetryRecord[]): LlmVsOrchestrationDatum[] {
+  let llmMs = 0;
+  const e2eSpans = records.filter(r => r.target === 'genai.http POST /api/chat');
+  const totalE2eMs = e2eSpans.reduce((sum, r) => sum + r.duration, 0);
+
+  for (const r of records) {
+    if (categorizeSpan(r) !== 'llm') continue;
+    const secStr = r.customDimensions['gen_ai.client.operation.duration'];
+    if (!isNullish(secStr)) {
+      const ms = parseFloat(secStr!) * 1000;
+      if (isFinite(ms) && ms > 0) { llmMs += ms; continue; }
+    }
+    llmMs += r.duration;
+  }
+
+  const orchMs = Math.max(0, totalE2eMs - llmMs);
+  return [
+    { name: 'LLM', durationMs: Math.round(llmMs) },
+    { name: 'Orquestación', durationMs: Math.round(orchMs) },
+  ];
+}
+
 export function computeDerived(data: TelemetryRecord[]) {
   const traces    = computeTraces(data);
   const traceKpis = computeTraceKpis(traces);
+  const vista1Kpis = computeVista1Kpis(traces, data);
+  const enhancedTraces = computeEnhancedTraces(traces);
 
   return {
     telemetryData: data,
     totalRequests: data.length,
     traces,
+    enhancedTraces,
     traceKpis,
+    vista1Kpis,
+    filterOptions: extractFilterOptions(data),
     spanCategoryData: spanCategoryBreakdown(data),
     toolUsageData: toolUsageBreakdown(data),
     traceTimelineData: bucketTracesByHour(traces),
     errorRateTrendData: errorRateTrend(traces),
     failedTraces: traces.filter((t) => !t.success),
     slowestTraces: [...traces].sort((a, b) => b.durationMs - a.durationMs).slice(0, 10),
+    latencyTimeSeriesData: computeLatencyTimeSeries(data),
+    finishReasonsData: computeFinishReasons(data),
+    tokensByDayData: computeTokensByDay(data),
+    costByModelData: computeCostByModel(data),
+    agentInvocationsData: computeAgentInvocations(data),
+    stageDurationData: computeAvgDurationByStage(data),
+    llmVsOrchestrationData: computeLlmVsOrchestration(data),
     truncated: false,
   };
 }

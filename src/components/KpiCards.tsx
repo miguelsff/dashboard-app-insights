@@ -1,7 +1,7 @@
 "use client";
 
 import { useTelemetry } from "@/context/TelemetryContext";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, formatCurrency, formatTokenCount, formatPercent } from "@/lib/format";
 
 function KpiCardSkeleton() {
   return (
@@ -17,20 +17,34 @@ function KpiCardSkeleton() {
 }
 
 export default function KpiCards() {
-  const { traceKpis, isLoading } = useTelemetry();
+  const { vista1Kpis, isLoading } = useTelemetry();
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => <KpiCardSkeleton key={i} />)}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => <KpiCardSkeleton key={i} />)}
       </div>
     );
   }
 
+  const successRateColor =
+    vista1Kpis.toolCallSuccessRate >= 95
+      ? "text-emerald-400"
+      : vista1Kpis.toolCallSuccessRate >= 85
+        ? "text-yellow-400"
+        : "text-red-400";
+
+  const successRateBg =
+    vista1Kpis.toolCallSuccessRate >= 95
+      ? "bg-emerald-500/10"
+      : vista1Kpis.toolCallSuccessRate >= 85
+        ? "bg-yellow-500/10"
+        : "bg-red-500/10";
+
   const cards = [
     {
       label: "Total Traces",
-      value: traceKpis.totalTraces.toString(),
+      value: vista1Kpis.totalTraces.toString(),
       sub: "agent conversations",
       color: "text-azure-400",
       bg: "bg-azure-500/10",
@@ -42,22 +56,9 @@ export default function KpiCards() {
       ),
     },
     {
-      label: "Trace Success Rate",
-      value: `${traceKpis.traceSuccessRate}%`,
-      sub: `${traceKpis.successfulTraces} of ${traceKpis.totalTraces} succeeded`,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-    },
-    {
-      label: "Avg Trace Duration",
-      value: formatDuration(traceKpis.avgTraceDurationMs),
-      sub: `${traceKpis.avgSpansPerTrace} spans avg per trace`,
+      label: "Duración E2E (p50)",
+      value: vista1Kpis.e2eDurationP50Ms > 0 ? formatDuration(vista1Kpis.e2eDurationP50Ms) : "—",
+      sub: "median request latency",
       color: "text-yellow-400",
       bg: "bg-yellow-500/10",
       icon: (
@@ -68,9 +69,22 @@ export default function KpiCards() {
       ),
     },
     {
-      label: "Avg LLM Latency",
-      value: traceKpis.avgLlmLatencyMs > 0 ? formatDuration(traceKpis.avgLlmLatencyMs) : '—',
-      sub: `${traceKpis.totalLlmCalls} calls · ${(traceKpis.totalInputTokens + traceKpis.totalOutputTokens).toLocaleString('en-US')} tokens`,
+      label: "Duración E2E (p95)",
+      value: vista1Kpis.e2eDurationP95Ms > 0 ? formatDuration(vista1Kpis.e2eDurationP95Ms) : "—",
+      sub: "tail latency",
+      color: "text-orange-400",
+      bg: "bg-orange-500/10",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+      ),
+    },
+    {
+      label: "Tokens Consumidos",
+      value: formatTokenCount(vista1Kpis.totalInputTokens + vista1Kpis.totalOutputTokens),
+      sub: `Input: ${formatTokenCount(vista1Kpis.totalInputTokens)} | Output: ${formatTokenCount(vista1Kpis.totalOutputTokens)}`,
       color: "text-violet-400",
       bg: "bg-violet-500/10",
       icon: (
@@ -80,10 +94,36 @@ export default function KpiCards() {
         </svg>
       ),
     },
+    {
+      label: "Costo Estimado",
+      value: formatCurrency(vista1Kpis.estimatedCostUsd),
+      sub: "based on model pricing",
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
+    {
+      label: "Tool Call Success Rate",
+      value: formatPercent(vista1Kpis.toolCallSuccessRate),
+      sub: `${vista1Kpis.toolCallSuccess} de ${vista1Kpis.toolCallTotal} exitosos`,
+      color: successRateColor,
+      bg: successRateBg,
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      ),
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {cards.map(({ label, value, sub, color, bg, icon }) => (
         <div key={label} className="card flex flex-col gap-3">
           <div className={`w-9 h-9 rounded-lg ${bg} ${color} flex items-center justify-center`}>

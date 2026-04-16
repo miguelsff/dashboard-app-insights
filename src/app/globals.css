@@ -55,4 +55,13 @@
   .badge-failure {
     @apply inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-400;
   }
+  .badge-neutral {
+    @apply inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-800/50 text-gray-400;
+  }
+  .badge-model {
+    @apply inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-azure-500/10 text-azure-400;
+  }
+  .badge-agent {
+    @apply inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-900/50 text-emerald-400;
+  }
 }

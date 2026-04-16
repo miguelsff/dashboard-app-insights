@@ -44,6 +44,7 @@ export interface CustomDimensions {
   'custom_attrs.operation_name'?: string;
   'custom_attrs.otel_sink_server'?: string;
   'custom_attrs.service_name'?: string;
+  'custom_attrs.session_id'?: string;
   'custom_attrs.trace_link'?: string;
   [key: string]: string | undefined;
 }
@@ -109,4 +110,93 @@ export interface TraceKpis {
   totalToolCalls: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+}
+
+// ── Vista 1 types ──────────────────────────────────────────────────────
+
+export interface ModelPricing {
+  inputPer1M: number;
+  outputPer1M: number;
+}
+
+export interface ParsedAdditionalProperties {
+  AGENT_ID?: string;
+  AGENT_VERSION?: string;
+  [key: string]: string | undefined;
+}
+
+export interface GlobalFilters {
+  models: string[];
+  agents: string[];
+  services: string[];
+  agentVersion: string | null;
+  status: string | null;
+}
+
+export interface FilterOptions {
+  models: string[];
+  agents: string[];
+  services: string[];
+  agentVersions: string[];
+  statuses: string[];
+}
+
+export interface Vista1Kpis {
+  totalTraces: number;
+  e2eDurationP50Ms: number;
+  e2eDurationP95Ms: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  estimatedCostUsd: number;
+  toolCallSuccessRate: number;
+  toolCallTotal: number;
+  toolCallSuccess: number;
+}
+
+export interface EnhancedTrace extends Trace {
+  sessionId: string | null;
+  agentVersion: string | null;
+  models: string[];
+  agents: string[];
+  traceLink: string | null;
+  status: 'ok' | 'error' | 'unset';
+}
+
+export interface LatencyTimePoint {
+  day: string;
+  p50Ms: number;
+  p95Ms: number;
+}
+
+export interface FinishReasonDatum {
+  reason: string;
+  count: number;
+}
+
+export interface TokensByDayDatum {
+  day: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+export interface CostByModelDatum {
+  model: string;
+  costInput: number;
+  costOutput: number;
+}
+
+export interface AgentInvocationDatum {
+  agent: string;
+  count: number;
+  avgDurationMs: number;
+}
+
+export interface StageDurationDatum {
+  stage: string;
+  avgDurationMs: number;
+}
+
+export interface LlmVsOrchestrationDatum {
+  name: string;
+  durationMs: number;
 }

@@ -25,3 +25,26 @@ export const GRID_PROPS = {
   strokeDasharray: "3 3",
   stroke: "#1a2340",
 } as const;
+
+export const VISTA1_COLORS = {
+  p50: '#60a5fa',
+  p95: '#f59e0b',
+  inputTokens: '#a78bfa',
+  outputTokens: '#22d3ee',
+  llmTime: '#a78bfa',
+  orchestrationTime: '#34d399',
+} as const;
+
+export const FINISH_REASON_COLORS: Record<string, string> = {
+  stop: '#34d399',
+  tool_calls: '#22d3ee',
+  length: '#f59e0b',
+  content_filter: '#ef4444',
+  error: '#ef4444',
+};
+
+export const MODEL_COLORS: Record<string, string> = {
+  'gpt-4o-mini': '#60a5fa',
+  'gpt-4o': '#a78bfa',
+  'gpt-4': '#f59e0b',
+};
