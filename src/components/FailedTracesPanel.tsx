@@ -15,7 +15,9 @@ export default function FailedTracesPanel() {
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {failedTraces.map((t) => {
-          const firstFailingSpan = t.spans.find((s) => !s.success);
+          const firstFailingSpan = t.spans.find(
+            (s) => s.itemType === 'exception' || s.customDimensions['otel.status_code'] === 'STATUS_CODE_ERROR'
+          );
           return (
             <div key={t.traceId} className="bg-surface-900 rounded-lg p-3 border border-red-500/10 space-y-1.5">
               <div className="flex items-start justify-between gap-2">
@@ -33,7 +35,7 @@ export default function FailedTracesPanel() {
 
               {firstFailingSpan && (
                 <p className="text-xs text-gray-500">
-                  Failing span: <span className="text-gray-400">{firstFailingSpan.name}</span>
+                  Failing span: <span className="text-gray-400">{firstFailingSpan.target || firstFailingSpan.itemType}</span>
                 </p>
               )}
 

@@ -33,6 +33,50 @@ function parseDateRange(searchParams: URLSearchParams): { startDate: string; end
   return { startDate, endDate };
 }
 
+/**
+ * Parse the App Insights portal timestamp format:
+ * "M/D/YYYY, H:MM:SS.mmm AM/PM" → ISO 8601 UTC
+ */
+function parsePortalTimestamp(str: string): string {
+  const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})\.(\d+)\s*(AM|PM)/i);
+  if (!m) return str;
+  const [, mo, day, year, rawH, min, sec, ms, ampm] = m;
+  let h = parseInt(rawH, 10);
+  if (ampm.toUpperCase() === 'PM' && h !== 12) h += 12;
+  if (ampm.toUpperCase() === 'AM' && h === 12) h = 0;
+  return (
+    `${year}-${mo.padStart(2, '0')}-${day.padStart(2, '0')}` +
+    `T${String(h).padStart(2, '0')}:${min}:${sec}.${ms.slice(0, 3).padEnd(3, '0')}Z`
+  );
+}
+
+function rowToRecord(row: Record<string, string>): TelemetryRecord {
+  // CSV header uses "timestamp [UTC]"; App Insights REST API uses "timestamp"
+  const rawTs = row['timestamp [UTC]'] ?? row['timestamp'] ?? '';
+  const timestamp = ISO_RE.test(rawTs) ? rawTs : parsePortalTimestamp(rawTs);
+
+  let customDimensions: Record<string, string> = {};
+  try {
+    if (row.customDimensions) {
+      customDimensions = JSON.parse(row.customDimensions) as Record<string, string>;
+    }
+  } catch {
+    // malformed JSON — keep empty object
+  }
+
+  return {
+    timestamp,
+    id:                row.id               ?? '',
+    target:            row.target           ?? '',
+    itemType:          row.itemType         ?? '',
+    customDimensions,
+    operation_Name:    row.operation_Name   ?? '',
+    operation_Id:      row.operation_Id     ?? '',
+    operation_ParentId: row.operation_ParentId ?? '',
+    duration:          parseFloat(row.duration) || 0,
+  };
+}
+
 /** Load records from src/data/data.csv, filtered to [startDate, endDate]. */
 function loadOfflineRecords(startDate: string, endDate: string): TelemetryRecord[] {
   const csvPath = path.join(process.cwd(), 'src', 'data', 'data.csv');
@@ -41,49 +85,19 @@ function loadOfflineRecords(startDate: string, endDate: string): TelemetryRecord
     throw new Error(`Offline mode enabled but CSV not found at ${csvPath}`);
   }
 
-  const text = fs.readFileSync(csvPath, 'utf-8');
-  const rows  = parseCSV(text);
+  // Strip BOM if present
+  let text = fs.readFileSync(csvPath, 'utf-8');
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
 
+  const rows  = parseCSV(text);
   const start = Date.parse(startDate);
   const end   = Date.parse(endDate);
 
   return rows
-    .filter((row) => {
-      const ts = Date.parse(row.timestamp);
+    .map(rowToRecord)
+    .filter((r) => {
+      const ts = Date.parse(r.timestamp);
       return !isNaN(ts) && ts >= start && ts <= end;
-    })
-    .map((row): TelemetryRecord => {
-      let customDimensions: Record<string, string> = {};
-      try {
-        if (row.customDimensions) {
-          customDimensions = JSON.parse(row.customDimensions) as Record<string, string>;
-        }
-      } catch {
-        // malformed JSON in the field — keep empty object
-      }
-
-      return {
-        timestamp:            row.timestamp            ?? '',
-        id:                   row.id                   ?? '',
-        target:               row.target               ?? '',
-        type:                 row.type                 ?? '',
-        name:                 row.name                 ?? '',
-        success:              row.success?.toLowerCase() === 'true',
-        resultCode:           row.resultCode           ?? '',
-        duration:             parseFloat(row.duration) || 0,
-        performanceBucket:    row.performanceBucket    ?? '',
-        itemType:             row.itemType             ?? '',
-        customDimensions,
-        operation_Name:       row.operation_Name       ?? '',
-        operation_Id:         row.operation_Id         ?? '',
-        operation_ParentId:   row.operation_ParentId   ?? '',
-        client_Type:          row.client_Type          ?? '',
-        client_Model:         row.client_Model         ?? '',
-        client_OS:            row.client_OS            ?? '',
-        client_IP:            row.client_IP            ?? '',
-        client_City:          row.client_City          ?? '',
-        client_StateOrProvince: row.client_StateOrProvince ?? '',
-      };
     });
 }
 
@@ -106,10 +120,7 @@ export async function GET(req: Request) {
         dateRange: { startDate, endDate },
       } satisfies TelemetryApiResponse);
     } catch (err) {
-      return NextResponse.json(
-        { error: String(err) },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: String(err) }, { status: 500 });
     }
   }
 
@@ -123,14 +134,25 @@ export async function GET(req: Request) {
   }
 
   const kql = `
-dependencies
+let operationIds = dependencies
+| where name == "genai.http POST /api/chat"
+| where timestamp between (datetime(${startDate}) .. datetime(${endDate}))
+| project operation_Id;
+union dependencies, requests, traces, exceptions
+| where operation_Id in (operationIds)
 | where timestamp between (datetime(${startDate}) .. datetime(${endDate}))
 | order by timestamp asc
 | take 5000
-| project timestamp, id, target, type, name, success, resultCode, duration,
-    performanceBucket, itemType, customDimensions,
-    operation_Name, operation_Id, operation_ParentId,
-    client_Type, client_Model, client_OS, client_IP, client_City, client_StateOrProvince
+| project
+    timestamp,
+    itemType,
+    customDimensions,
+    operation_Name,
+    operation_Id,
+    operation_ParentId,
+    id,
+    target,
+    duration
 `.trim();
 
   let token: string;
@@ -174,28 +196,27 @@ dependencies
 
   const idx = Object.fromEntries(columns.map((c, i) => [c.name, i]));
 
-  const records: TelemetryRecord[] = rows.map((row) => ({
-    timestamp:            row[idx.timestamp] as string,
-    id:                   row[idx.id] as string,
-    target:               row[idx.target] as string,
-    type:                 row[idx.type] as string,
-    name:                 row[idx.name] as string,
-    success:              row[idx.success] as boolean,
-    resultCode:           String(row[idx.resultCode] ?? ''),
-    duration:             row[idx.duration] as number,
-    performanceBucket:    row[idx.performanceBucket] as string,
-    itemType:             row[idx.itemType] as string,
-    customDimensions:     (row[idx.customDimensions] ?? {}) as Record<string, string>,
-    operation_Name:       row[idx.operation_Name] as string,
-    operation_Id:         row[idx.operation_Id] as string,
-    operation_ParentId:   row[idx.operation_ParentId] as string,
-    client_Type:          row[idx.client_Type] as string,
-    client_Model:         row[idx.client_Model] as string,
-    client_OS:            row[idx.client_OS] as string,
-    client_IP:            row[idx.client_IP] as string,
-    client_City:          row[idx.client_City] as string,
-    client_StateOrProvince: row[idx.client_StateOrProvince] as string,
-  }));
+  const records: TelemetryRecord[] = rows.map((row) => {
+    let customDimensions: Record<string, string> = {};
+    try {
+      const raw = row[idx.customDimensions];
+      if (raw && typeof raw === 'object') {
+        customDimensions = raw as Record<string, string>;
+      }
+    } catch { /* empty */ }
+
+    return {
+      timestamp:          row[idx.timestamp] as string,
+      id:                 row[idx.id] as string,
+      target:             (row[idx.target] as string) ?? '',
+      itemType:           row[idx.itemType] as string,
+      customDimensions,
+      operation_Name:     (row[idx.operation_Name] as string) ?? '',
+      operation_Id:       row[idx.operation_Id] as string,
+      operation_ParentId: (row[idx.operation_ParentId] as string) ?? '',
+      duration:           (row[idx.duration] as number) ?? 0,
+    };
+  });
 
   return NextResponse.json({
     records,

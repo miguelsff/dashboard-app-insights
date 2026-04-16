@@ -8,8 +8,8 @@ import type { SpanCategory } from "@/types/telemetry";
 const LABELS: Record<SpanCategory, string> = {
   llm:   'LLM',
   tool:  'Tool',
+  agent: 'Agent',
   http:  'HTTP',
-  db:    'Database',
   other: 'Other',
 };
 

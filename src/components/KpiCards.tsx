@@ -70,7 +70,7 @@ export default function KpiCards() {
     {
       label: "Avg LLM Latency",
       value: traceKpis.avgLlmLatencyMs > 0 ? formatDuration(traceKpis.avgLlmLatencyMs) : '—',
-      sub: `${traceKpis.totalLlmCalls} LLM calls total`,
+      sub: `${traceKpis.totalLlmCalls} calls · ${(traceKpis.totalInputTokens + traceKpis.totalOutputTokens).toLocaleString('en-US')} tokens`,
       color: "text-violet-400",
       bg: "bg-violet-500/10",
       icon: (

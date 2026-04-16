@@ -39,8 +39,8 @@ function SpanRow({ span, depth = 0 }: { span: TelemetryRecord; depth?: number })
             className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
             style={{ backgroundColor: color }}
           />
-          <span className="text-xs text-gray-300 truncate max-w-[200px]" title={span.name}>
-            {span.name || '—'}
+          <span className="text-xs text-gray-300 truncate max-w-[200px]" title={span.target}>
+            {span.target || '—'}
           </span>
           <span className="text-[10px] px-1 rounded" style={{ color, background: `${color}22` }}>
             {label}
@@ -50,12 +50,14 @@ function SpanRow({ span, depth = 0 }: { span: TelemetryRecord; depth?: number })
       <td className="py-1.5 px-3 text-xs text-gray-500">{formatUtcTime(span.timestamp)}</td>
       <td className="py-1.5 px-3 text-xs text-gray-400">{formatDuration(span.duration)}</td>
       <td className="py-1.5 px-3">
-        <span className={span.success ? 'badge-success' : 'badge-failure'}>
-          {span.success ? 'ok' : 'fail'}
-        </span>
+        {span.itemType === 'exception' ? (
+          <span className="badge-failure">exception</span>
+        ) : (
+          <span className="text-xs text-gray-600">{span.itemType}</span>
+        )}
       </td>
-      <td className="py-1.5 px-3 text-xs text-gray-600 truncate max-w-[160px]" title={span.target}>
-        {span.target || '—'}
+      <td className="py-1.5 px-3 text-xs text-gray-600">
+        {span.customDimensions['otel.status_code']?.replace('STATUS_CODE_', '') ?? '—'}
       </td>
     </tr>
   );
@@ -112,8 +114,8 @@ function TraceRow({ trace, index }: { trace: Trace; index: number }) {
                     <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Span</th>
                     <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Time</th>
                     <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Duration</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Status</th>
-                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Target</th>
+                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">Type</th>
+                    <th className="py-1 px-3 text-[10px] text-gray-600 text-left font-medium">OTel Status</th>
                   </tr>
                 </thead>
                 <tbody>

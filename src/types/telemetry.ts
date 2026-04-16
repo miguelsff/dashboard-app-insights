@@ -1,47 +1,67 @@
 export interface CustomDimensions {
-  '_MS.ResourceAttributeId'?: string;
-  'error.message'?: string;
+  // GenAI — agent
+  'gen_ai.agent.name'?: string;
+  'gen_ai.agent.id'?: string;
+  'gen_ai.provider.name'?: string;
   'gen_ai.conversation.id'?: string;
-  'gen_ai.function.input.args'?: string;
-  'gen_ai.function.input.kwargs'?: string;
-  'gen_ai.function.output'?: string;
+  // GenAI — operation
   'gen_ai.operation.name'?: string;
-  'gen_ai.request.body_preview'?: string;
-  'gen_ai.response.latency_ms'?: string;
-  'gen_ai.service'?: string;
-  'otel.parent_span_id'?: string;
-  'otel.span_id'?: string;
-  'otel.trace_id'?: string;
-  'server.host'?: string;
+  'gen_ai.client.operation.duration'?: string; // seconds as string
+  // GenAI — request
+  'gen_ai.request.model'?: string;
+  'gen_ai.request.temperature'?: string;
+  'gen_ai.request.top_p'?: string;
+  'gen_ai.request.choice.count'?: string;
+  'gen_ai.request.body.preview'?: string;
+  'gen_ai.system.instructions'?: string;
+  // GenAI — response
+  'gen_ai.response.finish_reasons'?: string;
+  'gen_ai.response.id'?: string;
+  // GenAI — tool
+  'gen_ai.tool.name'?: string;
+  'gen_ai.tool.type'?: string;
+  'gen_ai.tool.description'?: string;
+  'gen_ai.tool.call.id'?: string;
+  'gen_ai.tool.call.arguments'?: string;
+  'gen_ai.tool.call.result'?: string;
+  'gen_ai.tool.definitions'?: string;
+  // GenAI — usage
+  'gen_ai.usage.input_tokens'?: string;
+  'gen_ai.usage.output_tokens'?: string;
+  // OTel
+  'otel.status_code'?: string; // e.g. "STATUS_CODE_UNSET" | "STATUS_CODE_OK" | "STATUS_CODE_ERROR"
+  // Service
+  'service.name'?: string;
   'service.type'?: string;
-  'session.id'?: string;
+  // Instrumentation
+  'instrumentationlibrary.name'?: string;
+  'instrumentationlibrary.version'?: string;
+  'telemetry.sdk.language'?: string;
+  'telemetry.sdk.name'?: string;
+  'telemetry.sdk.version'?: string;
+  // Custom app attributes
+  'custom_attrs.additional_properties'?: string;
+  'custom_attrs.operation_name'?: string;
+  'custom_attrs.otel_sink_server'?: string;
+  'custom_attrs.service_name'?: string;
+  'custom_attrs.trace_link'?: string;
   [key: string]: string | undefined;
 }
 
+/** A single span row returned by the KQL query (union of dependencies/requests/traces/exceptions). */
 export interface TelemetryRecord {
-  timestamp: string;
-  id: string;
-  target: string;
-  type: string;
-  name: string;
-  success: boolean;
-  resultCode: string;
-  duration: number;
-  performanceBucket: string;
-  itemType: string;
+  timestamp: string;        // ISO 8601 UTC
+  id: string;               // span ID
+  target: string;           // span display name, e.g. "chat gpt-4o-mini"
+  itemType: string;         // "dependency" | "request" | "trace" | "exception"
   customDimensions: CustomDimensions;
   operation_Name: string;
-  operation_Id: string;
+  operation_Id: string;     // trace ID
   operation_ParentId: string;
-  client_Type: string;
-  client_Model: string;
-  client_OS: string;
-  client_IP: string;
-  client_City: string;
-  client_StateOrProvince: string;
+  duration: number;         // ms
 }
 
-export type SpanCategory = 'llm' | 'tool' | 'http' | 'db' | 'other';
+export type SpanCategory = 'llm' | 'tool' | 'agent' | 'http' | 'other';
 
 export interface DateRange {
   startDate: string; // ISO 8601
@@ -67,11 +87,12 @@ export interface Trace {
   failureReason: string | null;
   llmCallCount: number;
   toolCallCount: number;
-  httpCallCount: number;
+  agentCallCount: number;
   avgLlmLatencyMs: number | null;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   conversationId: string | null;
-  sessionId: string | null;
-  clientCity: string | null;
+  serviceName: string | null;
   spans: TelemetryRecord[];
 }
 
@@ -86,4 +107,6 @@ export interface TraceKpis {
   avgLlmLatencyMs: number;
   totalLlmCalls: number;
   totalToolCalls: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
 }

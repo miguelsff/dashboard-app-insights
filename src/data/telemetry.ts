@@ -1,30 +1,24 @@
 import type { SpanCategory, Trace, TraceKpis, TelemetryRecord } from '@/types/telemetry';
 
-const BUCKET_ORDER = [
-  '<250ms',
-  '250ms-500ms',
-  '500ms-1sec',
-  '1sec-3sec',
-  '3sec-7sec',
-  '7sec-15sec',
-  '15sec-30sec',
-  '30sec-1min',
-  '>=1min',
-  '>=5min',
-];
-
 export function categorizeSpan(r: TelemetryRecord): SpanCategory {
-  const typ  = (r.type ?? '').toLowerCase();
-  const name = (r.name ?? '').toLowerCase();
-  const op   = (r.customDimensions['gen_ai.operation.name'] ?? '').toLowerCase();
-
-  if (op || typ.includes('openai') || typ.includes('llm') ||
-      name.includes('chat.completions') || name.includes('embeddings')) return 'llm';
-  if (op === 'execute_tool' || name.startsWith('tool.') ||
-      r.customDimensions['gen_ai.function.output'] !== undefined) return 'tool';
-  if (typ === 'http' || typ === 'https') return 'http';
-  if (typ.includes('sql') || typ.includes('postgres') || typ.includes('mongo')) return 'db';
+  const op = (r.customDimensions['gen_ai.operation.name'] ?? '').toLowerCase();
+  if (op === 'chat') return 'llm';
+  if (op === 'execute_tool') return 'tool';
+  if (op === 'invoke_agent') return 'agent';
+  if (r.itemType === 'request') return 'http';
+  // Fallback: inspect target prefix
+  const t = (r.target ?? '').toLowerCase();
+  if (t.startsWith('chat ')) return 'llm';
+  if (t.startsWith('execute_tool ')) return 'tool';
+  if (t.startsWith('invoke_agent ')) return 'agent';
   return 'other';
+}
+
+/** A span is considered failed if it is an exception item or has ERROR status. */
+function spanFailed(r: TelemetryRecord): boolean {
+  if (r.itemType === 'exception') return true;
+  const code = r.customDimensions['otel.status_code'] ?? '';
+  return code === 'STATUS_CODE_ERROR';
 }
 
 export function computeTraces(records: TelemetryRecord[]): Trace[] {
@@ -42,13 +36,17 @@ export function computeTraces(records: TelemetryRecord[]): Trace[] {
       a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0
     );
 
+    // Root: span whose parent is the operation_Id itself (App Insights convention)
+    // or whose parent is not any other span's id in this set.
     const idSet = new Set(spans.map((s) => s.id));
-    const root = spans.find(
-      (s) => !s.operation_ParentId || !idSet.has(s.operation_ParentId)
-    ) ?? spans[0];
+    const root =
+      spans.find((s) => s.operation_ParentId === s.operation_Id) ??
+      spans.find((s) => !s.operation_ParentId || !idSet.has(s.operation_ParentId)) ??
+      spans[0];
 
-    let llmCount = 0, toolCount = 0, httpCount = 0;
+    let llmCount = 0, toolCount = 0, agentCount = 0;
     let llmLatencySum = 0, llmLatencyN = 0;
+    let inputTokens = 0, outputTokens = 0;
     let failureReason: string | null = null;
     let anyFailure = false;
 
@@ -56,44 +54,58 @@ export function computeTraces(records: TelemetryRecord[]): Trace[] {
       const cat = categorizeSpan(s);
       if (cat === 'llm') {
         llmCount++;
-        const lat = Number(s.customDimensions['gen_ai.response.latency_ms']);
-        if (Number.isFinite(lat) && lat > 0) { llmLatencySum += lat; llmLatencyN++; }
+        // gen_ai.client.operation.duration is in seconds
+        const secStr = s.customDimensions['gen_ai.client.operation.duration'];
+        if (secStr && secStr !== 'null') {
+          const latMs = parseFloat(secStr) * 1000;
+          if (isFinite(latMs) && latMs > 0) { llmLatencySum += latMs; llmLatencyN++; }
+        } else if (s.duration > 0) {
+          llmLatencySum += s.duration; llmLatencyN++;
+        }
+        const inp = parseInt(s.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10);
+        const out = parseInt(s.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10);
+        if (isFinite(inp)) inputTokens += inp;
+        if (isFinite(out)) outputTokens += out;
       } else if (cat === 'tool') {
         toolCount++;
-      } else if (cat === 'http') {
-        httpCount++;
+      } else if (cat === 'agent') {
+        agentCount++;
       }
 
-      if (!s.success) {
+      if (spanFailed(s)) {
         anyFailure = true;
-        const msg = s.customDimensions['error.message'];
-        if (msg && !failureReason) failureReason = msg;
+        if (!failureReason) {
+          failureReason =
+            s.customDimensions['error.message'] ??
+            s.customDimensions['otel.status_code'] ??
+            s.target ??
+            null;
+        }
       }
     }
 
     const firstStart = Date.parse(spans[0].timestamp);
-    const lastEnd = Math.max(
-      ...spans.map((s) => Date.parse(s.timestamp) + s.duration)
-    );
-    const durationMs = root.duration > 0 ? root.duration : (lastEnd - firstStart);
+    const lastEnd = Math.max(...spans.map((s) => Date.parse(s.timestamp) + s.duration));
+    const durationMs = root.duration > 0 ? root.duration : lastEnd - firstStart;
 
     traces.push({
       traceId,
       rootSpanId: root.id,
-      operationName: root.operation_Name || root.name || traceId,
+      operationName: root.target || root.operation_Name || traceId,
       startTime: spans[0].timestamp,
       endTime: new Date(lastEnd).toISOString(),
       durationMs,
       spanCount: spans.length,
-      success: root.success,
+      success: !anyFailure,
       failureReason: anyFailure ? failureReason : null,
       llmCallCount: llmCount,
       toolCallCount: toolCount,
-      httpCallCount: httpCount,
+      agentCallCount: agentCount,
       avgLlmLatencyMs: llmLatencyN > 0 ? Math.round(llmLatencySum / llmLatencyN) : null,
+      totalInputTokens: inputTokens,
+      totalOutputTokens: outputTokens,
       conversationId: root.customDimensions['gen_ai.conversation.id'] ?? null,
-      sessionId: root.customDimensions['session.id'] ?? null,
-      clientCity: root.client_City || null,
+      serviceName: root.customDimensions['service.name'] ?? null,
       spans,
     });
   }
@@ -109,18 +121,22 @@ export function computeTraceKpis(traces: Trace[]): TraceKpis {
       traceSuccessRate: '0.0', avgTraceDurationMs: 0,
       avgSpansPerTrace: 0, avgLlmCallsPerTrace: 0,
       avgLlmLatencyMs: 0, totalLlmCalls: 0, totalToolCalls: 0,
+      totalInputTokens: 0, totalOutputTokens: 0,
     };
   }
 
   const successful = traces.filter((t) => t.success).length;
   let durationSum = 0, spansSum = 0, llmCallsSum = 0, toolCallsSum = 0;
   let llmLatencyWeightedSum = 0, llmLatencyWeight = 0;
+  let inputTokensTotal = 0, outputTokensTotal = 0;
 
   for (const t of traces) {
-    durationSum += t.durationMs;
-    spansSum    += t.spanCount;
-    llmCallsSum += t.llmCallCount;
+    durationSum  += t.durationMs;
+    spansSum     += t.spanCount;
+    llmCallsSum  += t.llmCallCount;
     toolCallsSum += t.toolCallCount;
+    inputTokensTotal  += t.totalInputTokens;
+    outputTokensTotal += t.totalOutputTokens;
     if (t.avgLlmLatencyMs !== null && t.llmCallCount > 0) {
       llmLatencyWeightedSum += t.avgLlmLatencyMs * t.llmCallCount;
       llmLatencyWeight      += t.llmCallCount;
@@ -138,6 +154,8 @@ export function computeTraceKpis(traces: Trace[]): TraceKpis {
     avgLlmLatencyMs: llmLatencyWeight > 0 ? Math.round(llmLatencyWeightedSum / llmLatencyWeight) : 0,
     totalLlmCalls: llmCallsSum,
     totalToolCalls: toolCallsSum,
+    totalInputTokens: inputTokensTotal,
+    totalOutputTokens: outputTokensTotal,
   };
 }
 
@@ -146,7 +164,7 @@ export function bucketTracesByHour(
 ): { hour: string; count: number; failures: number }[] {
   const map = new Map<string, { count: number; failures: number }>();
   for (const t of traces) {
-    const hour = t.startTime.slice(0, 13); // "2026-04-15T14"
+    const hour = t.startTime.slice(0, 13);
     const bucket = map.get(hour) ?? { count: 0, failures: 0 };
     bucket.count++;
     if (!t.success) bucket.failures++;
@@ -174,7 +192,7 @@ export function spanCategoryBreakdown(
     const cat = categorizeSpan(r);
     map.set(cat, (map.get(cat) ?? 0) + 1);
   }
-  const order: SpanCategory[] = ['llm', 'tool', 'http', 'db', 'other'];
+  const order: SpanCategory[] = ['llm', 'tool', 'agent', 'http', 'other'];
   return order.filter((c) => map.has(c)).map((category) => ({ category, count: map.get(category)! }));
 }
 
@@ -184,7 +202,10 @@ export function toolUsageBreakdown(
   const map = new Map<string, { count: number; totalDuration: number }>();
   for (const r of records) {
     if (categorizeSpan(r) !== 'tool') continue;
-    const tool = r.name || 'unknown';
+    const tool =
+      r.customDimensions['gen_ai.tool.name'] ||
+      r.target.replace(/^execute_tool\s+/i, '') ||
+      'unknown';
     const entry = map.get(tool) ?? { count: 0, totalDuration: 0 };
     entry.count++;
     entry.totalDuration += r.duration;
@@ -204,64 +225,9 @@ export function computeDerived(data: TelemetryRecord[]) {
   const traces    = computeTraces(data);
   const traceKpis = computeTraceKpis(traces);
 
-  // Legacy span-level metrics (kept for compatibility during migration)
-  const totalRequests = data.length;
-  const successCount  = data.filter((r) => r.success).length;
-  const failureCount  = totalRequests - successCount;
-  const avgDuration   = totalRequests > 0
-    ? Math.round(data.reduce((sum, r) => sum + r.duration, 0) / totalRequests)
-    : 0;
-  const successRate = totalRequests > 0
-    ? ((successCount / totalRequests) * 100).toFixed(1)
-    : '0.0';
-
-  const requestsByOperation = Object.entries(
-    data.reduce<Record<string, number>>((acc, r) => {
-      const key = r.customDimensions['gen_ai.operation.name'] ?? r.operation_Name;
-      acc[key] = (acc[key] ?? 0) + 1;
-      return acc;
-    }, {}),
-  ).map(([name, count]) => ({ name, count }));
-
-  const bucketCounts = data.reduce<Record<string, number>>((acc, r) => {
-    acc[r.performanceBucket] = (acc[r.performanceBucket] ?? 0) + 1;
-    return acc;
-  }, {});
-  const requestsByBucket = BUCKET_ORDER.filter((b) => bucketCounts[b]).map((bucket) => ({
-    bucket,
-    count: bucketCounts[bucket],
-  }));
-
-  const successFailureData = [
-    { name: 'Success', value: successCount },
-    { name: 'Failure', value: failureCount },
-  ];
-
-  const timelineData = Object.entries(
-    data.reduce<Record<string, number>>((acc, r) => {
-      const minute = r.timestamp.slice(11, 16);
-      acc[minute] = (acc[minute] ?? 0) + 1;
-      return acc;
-    }, {}),
-  )
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([minute, count]) => ({ minute, count }));
-
-  const failedRecords = data.filter((r) => !r.success);
-
   return {
     telemetryData: data,
-    totalRequests,
-    successCount,
-    failureCount,
-    avgDuration,
-    successRate,
-    requestsByOperation,
-    requestsByBucket,
-    successFailureData,
-    timelineData,
-    failedRecords,
-    // New trace-level data
+    totalRequests: data.length,
     traces,
     traceKpis,
     spanCategoryData: spanCategoryBreakdown(data),
