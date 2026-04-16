@@ -5,7 +5,7 @@ import {
   ManagedIdentityCredential,
 } from '@azure/identity';
 import { NextResponse } from 'next/server';
-import type { TelemetryRecord } from '@/types/telemetry';
+import type { TelemetryRecord, TelemetryApiResponse } from '@/types/telemetry';
 
 // IDENTITY_ENDPOINT is set automatically by Azure App Service when Managed Identity is enabled.
 // Locally it is never present, so we skip straight to the local credential chain —
@@ -17,18 +17,9 @@ const credential = process.env.IDENTITY_ENDPOINT
       new AzureCliCredential(),    // local npm run dev with `az login`
     );
 
-const KQL = `
-dependencies
-| where timestamp > ago(7d)
-| order by timestamp desc
-| take 100
-| project timestamp, id, target, type, name, success, resultCode, duration,
-    performanceBucket, itemType, customDimensions,
-    operation_Name, operation_Id, operation_ParentId,
-    client_Type, client_Model, client_OS, client_IP, client_City, client_StateOrProvince
-`.trim();
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?Z$/;
 
-export async function GET() {
+export async function GET(req: Request) {
   const appId = process.env.APPLICATIONINSIGHTS_APP_ID;
   if (!appId) {
     return NextResponse.json(
@@ -36,6 +27,32 @@ export async function GET() {
       { status: 500 },
     );
   }
+
+  const { searchParams } = new URL(req.url);
+  let startDate = searchParams.get('startDate');
+  let endDate   = searchParams.get('endDate');
+
+  // Default: last 7 days ending now
+  if (!startDate || !endDate) {
+    const now = new Date();
+    endDate   = now.toISOString();
+    startDate = new Date(now.getTime() - 7 * 24 * 3600_000).toISOString();
+  }
+
+  if (!ISO_RE.test(startDate) || !ISO_RE.test(endDate)) {
+    return NextResponse.json({ error: 'Invalid date format. Expected ISO 8601 UTC.' }, { status: 400 });
+  }
+
+  const kql = `
+dependencies
+| where timestamp between (datetime(${startDate}) .. datetime(${endDate}))
+| order by timestamp asc
+| take 5000
+| project timestamp, id, target, type, name, success, resultCode, duration,
+    performanceBucket, itemType, customDimensions,
+    operation_Name, operation_Id, operation_ParentId,
+    client_Type, client_Model, client_OS, client_IP, client_City, client_StateOrProvince
+`.trim();
 
   let token: string;
   try {
@@ -48,7 +65,7 @@ export async function GET() {
     );
   }
 
-  const url = `https://api.applicationinsights.io/v1/apps/${appId}/query?query=${encodeURIComponent(KQL)}`;
+  const url = `https://api.applicationinsights.io/v1/apps/${appId}/query?query=${encodeURIComponent(kql)}`;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -101,5 +118,10 @@ export async function GET() {
     client_StateOrProvince: row[idx.client_StateOrProvince] as string,
   }));
 
-  return NextResponse.json(records);
+  return NextResponse.json({
+    records,
+    truncated: records.length >= 5000,
+    totalReturned: records.length,
+    dateRange: { startDate, endDate },
+  } satisfies TelemetryApiResponse);
 }

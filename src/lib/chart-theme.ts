@@ -1,3 +1,11 @@
+export const CATEGORY_COLORS = {
+  llm:   '#a78bfa', // purple
+  tool:  '#22d3ee', // cyan
+  http:  '#60a5fa', // blue
+  db:    '#fb923c', // orange
+  other: '#6b7280', // gray
+} as const;
+
 export const TOOLTIP_STYLE = {
   contentStyle: {
     backgroundColor: "#0f1629",
