@@ -231,7 +231,7 @@ export function toolUsageBreakdown(
 
 // ── Vista 1 helpers ──────────────────────────────────────────────────────
 
-function isNullish(v: string | undefined): boolean {
+export function isNullish(v: string | undefined): boolean {
   return !v || v === 'null';
 }
 

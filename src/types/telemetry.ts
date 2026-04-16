@@ -200,3 +200,84 @@ export interface LlmVsOrchestrationDatum {
   name: string;
   durationMs: number;
 }
+
+// ── Vista 2 types ──────────────────────────────────────────────────────
+
+export interface SpanTreeNode {
+  span: TelemetryRecord;
+  children: SpanTreeNode[];
+  depth: number;
+  offsetMs: number;
+}
+
+export type WaterfallSpanType =
+  | 'chat'
+  | 'execute_tool'
+  | 'invoke_agent'
+  | 'workflow'
+  | 'executor'
+  | 'edge_group'
+  | 'http'
+  | 'other';
+
+export interface TraceDetailKpis {
+  traceId: string;
+  startTime: string;
+  durationMs: number;
+  spanCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface TraceMetadata {
+  sessionId: string | null;
+  traceLink: string | null;
+  agentId: string | null;
+  agentVersion: string | null;
+  serviceName: string | null;
+  workflowId: string | null;
+  workflowDefinition: string | null;
+  endpointInput: string | null;
+  endpointOutput: string | null;
+  dacInput: string | null;
+  dacOutput: string | null;
+  httpStatus: string | null;
+  streaming: string | null;
+  sdkInfo: string | null;
+  instrumentationInfo: string | null;
+}
+
+export interface LlmCallTokenDatum {
+  index: number;
+  label: string;
+  parentAgent: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  finishReason: string;
+  llmLatencyMs: number;
+  temperature: string | null;
+}
+
+export interface ToolCallRow {
+  toolName: string;
+  toolType: string | null;
+  callId: string | null;
+  arguments: string | null;
+  result: string | null;
+  durationMs: number;
+  status: string;
+  description: string | null;
+}
+
+export interface RoutingRow {
+  target: string;
+  executorType: string | null;
+  executorId: string | null;
+  edgeGroupType: string | null;
+  delivered: string | null;
+  durationMs: number;
+  linkedSpans: string | null;
+  output: string | null;
+}

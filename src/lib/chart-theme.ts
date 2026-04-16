@@ -48,3 +48,14 @@ export const MODEL_COLORS: Record<string, string> = {
   'gpt-4o': '#a78bfa',
   'gpt-4': '#f59e0b',
 };
+
+export const WATERFALL_COLORS: Record<string, string> = {
+  chat: '#4A90D9',
+  execute_tool: '#E8A838',
+  invoke_agent: '#7B68EE',
+  workflow: '#6B7280',
+  executor: '#9CA3AF',
+  edge_group: '#D1D5DB',
+  http: '#10B981',
+  other: '#4B5563',
+};

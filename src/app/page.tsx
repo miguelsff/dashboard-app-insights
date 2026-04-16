@@ -1,6 +1,6 @@
 "use client";
 
-import { TelemetryProvider, useTelemetry } from "@/context/TelemetryContext";
+import { useTelemetry } from "@/context/TelemetryContext";
 import DateRangePicker from "@/components/DateRangePicker";
 import GlobalFilters from "@/components/GlobalFilters";
 import KpiCards from "@/components/KpiCards";
@@ -42,43 +42,41 @@ function DashboardHeader() {
 
 export default function DashboardPage() {
   return (
-    <TelemetryProvider>
-      <main className="max-w-screen-2xl mx-auto px-4 py-8 space-y-5">
-        <DashboardHeader />
-        <DateRangePicker />
-        <GlobalFilters />
-        <KpiCards />
+    <main className="max-w-screen-2xl mx-auto px-4 py-8 space-y-5">
+      <DashboardHeader />
+      <DateRangePicker />
+      <GlobalFilters />
+      <KpiCards />
 
-        {/* Row 2: Latency + Finish Reasons */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="lg:col-span-2">
-            <LatencyTimeSeriesChart />
-          </div>
-          <FinishReasonsChart />
+      {/* Row 2: Latency + Finish Reasons */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2">
+          <LatencyTimeSeriesChart />
         </div>
+        <FinishReasonsChart />
+      </div>
 
-        {/* Row 3: Tokens + Cost */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <TokensByDayChart />
-          <CostByModelChart />
-        </div>
+      {/* Row 3: Tokens + Cost */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <TokensByDayChart />
+        <CostByModelChart />
+      </div>
 
-        {/* Row 4: Agents + Stage Duration */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-          <AgentInvocationsChart />
-          <StageDurationChart />
-        </div>
+      {/* Row 4: Agents + Stage Duration */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <AgentInvocationsChart />
+        <StageDurationChart />
+      </div>
 
-        {/* Row 5: LLM vs Orchestration */}
-        <LlmVsOrchestrationChart />
+      {/* Row 5: LLM vs Orchestration */}
+      <LlmVsOrchestrationChart />
 
-        {/* Trace Table */}
-        <TraceTable />
+      {/* Trace Table */}
+      <TraceTable />
 
-        <footer className="text-center text-xs text-gray-700 py-4">
-          Azure Application Insights · Agent Traces Dashboard
-        </footer>
-      </main>
-    </TelemetryProvider>
+      <footer className="text-center text-xs text-gray-700 py-4">
+        Azure Application Insights · Agent Traces Dashboard
+      </footer>
+    </main>
   );
 }

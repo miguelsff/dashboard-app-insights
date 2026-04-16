@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useTelemetry } from "@/context/TelemetryContext";
 import { formatDuration, formatUtcTimeMs, formatTokenCount } from "@/lib/format";
 import type { EnhancedTrace } from "@/types/telemetry";
@@ -123,7 +124,9 @@ export default function TraceTable() {
                     </td>
                     <td className="py-2.5 pr-3">
                       <span className="flex items-center">
-                        <span className="font-mono text-gray-300">{t.traceId.slice(0, 16)}</span>
+                        <Link href={`/trace/${t.traceId}`} className="font-mono text-azure-400 hover:text-azure-300 hover:underline">
+                          {t.traceId.slice(0, 16)}
+                        </Link>
                         <CopyButton text={t.traceId} />
                       </span>
                     </td>
@@ -155,17 +158,10 @@ export default function TraceTable() {
                     </td>
                     <td className="py-2.5">
                       {t.traceLink ? (
-                        <a
-                          href={t.traceLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-azure-400 hover:text-azure-300"
-                          title="External trace link"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                          </svg>
-                        </a>
+                        <span className="flex items-center">
+                          <span className="font-mono text-xs text-gray-400">{t.traceLink.slice(0, 8)}</span>
+                          <CopyButton text={t.traceLink} />
+                        </span>
                       ) : (
                         <span className="text-gray-700">—</span>
                       )}
