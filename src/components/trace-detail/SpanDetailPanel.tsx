@@ -1,27 +1,10 @@
 "use client";
 
-import type { TelemetryRecord } from "@/types/telemetry";
-import { isNullish } from "@/data/telemetry";
+import type { TelemetryRecord, WaterfallSpanType } from "@/types/telemetry";
+import { val } from "@/data/telemetry";
 import { classifyWaterfallSpan } from "@/data/trace-detail";
 import { formatDuration } from "@/lib/format";
-import JsonViewer from "./JsonViewer";
-
-function val(v: string | undefined): string | null {
-  return isNullish(v) ? null : v!;
-}
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value || value === 'null') return null;
-  const isJson = value.startsWith('{') || value.startsWith('[');
-  return (
-    <div className="py-1.5">
-      <dt className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</dt>
-      <dd className="text-xs text-gray-300 mt-0.5">
-        {isJson ? <JsonViewer value={value} /> : value}
-      </dd>
-    </div>
-  );
-}
+import Field from "@/components/ui/Field";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const hasContent = (Array.isArray(children) ? children : [children]).some(c => c !== null);
@@ -36,6 +19,90 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+interface FieldDef {
+  label: string;
+  key: string;
+}
+
+const TYPED_SECTIONS: Array<{
+  types: WaterfallSpanType[];
+  title: string;
+  fields: FieldDef[];
+}> = [
+  {
+    types: ['chat'],
+    title: 'LLM',
+    fields: [
+      { label: 'Model', key: 'gen_ai.request.model' },
+      { label: 'Input Tokens', key: 'gen_ai.usage.input_tokens' },
+      { label: 'Output Tokens', key: 'gen_ai.usage.output_tokens' },
+      { label: 'Temperature', key: 'gen_ai.request.temperature' },
+      { label: 'Top P', key: 'gen_ai.request.top_p' },
+      { label: 'Response ID', key: 'gen_ai.response.id' },
+    ],
+  },
+  {
+    types: ['invoke_agent'],
+    title: 'Agent',
+    fields: [
+      { label: 'Agent Name', key: 'gen_ai.agent.name' },
+      { label: 'Agent ID', key: 'gen_ai.agent.id' },
+      { label: 'Provider', key: 'gen_ai.provider.name' },
+      { label: 'Model', key: 'gen_ai.request.model' },
+    ],
+  },
+  {
+    types: ['execute_tool'],
+    title: 'Tool',
+    fields: [
+      { label: 'Tool Name', key: 'gen_ai.tool.name' },
+      { label: 'Tool Type', key: 'gen_ai.tool.type' },
+      { label: 'Call ID', key: 'gen_ai.tool.call.id' },
+      { label: 'Description', key: 'gen_ai.tool.description' },
+      { label: 'Arguments', key: 'gen_ai.tool.call.arguments' },
+      { label: 'Result', key: 'gen_ai.tool.call.result' },
+    ],
+  },
+  {
+    types: ['executor', 'edge_group'],
+    title: 'Routing',
+    fields: [
+      { label: 'Executor Type', key: 'executor.type' },
+      { label: 'Executor ID', key: 'executor.id' },
+      { label: 'Edge Group Type', key: 'edge_group.type' },
+      { label: 'Edge Delivered', key: 'edge_group.delivered' },
+    ],
+  },
+];
+
+const STATIC_SECTIONS: Array<{ title: string; fields: FieldDef[] }> = [
+  {
+    title: 'Function I/O',
+    fields: [
+      { label: 'Function Input', key: 'custom_function.input' },
+      { label: 'Function Output', key: 'custom_function.output' },
+      { label: 'DAC Input', key: 'custom_function.dac_input' },
+      { label: 'DAC Output', key: 'custom_function.dac_output' },
+    ],
+  },
+  {
+    title: 'Endpoint I/O',
+    fields: [
+      { label: 'Endpoint Input', key: 'custom_endpoint.input' },
+      { label: 'Endpoint Output', key: 'custom_endpoint.output' },
+      { label: 'DAC Input', key: 'custom_endpoint.dac_input' },
+      { label: 'DAC Output', key: 'custom_endpoint.dac_output' },
+    ],
+  },
+  { title: 'Tools Available', fields: [{ label: 'Tool Definitions', key: 'gen_ai.tool.definitions' }] },
+  { title: 'Span Links', fields: [{ label: '_MS.links', key: '_MS.links' }] },
+];
+
+function parseFinishReasons(raw: string | null): string | null {
+  if (!raw) return null;
+  try { return JSON.parse(raw).join(', '); } catch { return raw; }
+}
+
 export default function SpanDetailPanel({
   span,
   onClose,
@@ -46,12 +113,7 @@ export default function SpanDetailPanel({
   const cd = span.customDimensions;
   const spanType = classifyWaterfallSpan(span);
 
-  let finishReasons: string | null = null;
-  const raw = val(cd['gen_ai.response.finish_reasons']);
-  if (raw) {
-    try { finishReasons = JSON.parse(raw).join(', '); } catch { finishReasons = raw; }
-  }
-
+  const finishReasons = parseFinishReasons(val(cd['gen_ai.response.finish_reasons']));
   const llmLatency = val(cd['gen_ai.client.operation.duration']);
   const llmLatencyFormatted = llmLatency ? `${parseFloat(llmLatency).toFixed(3)}s` : null;
 
@@ -75,70 +137,27 @@ export default function SpanDetailPanel({
           <Field label="Item Type" value={span.itemType} />
         </Section>
 
-        {spanType === 'chat' && (
-          <Section title="LLM">
-            <Field label="Model" value={val(cd['gen_ai.request.model'])} />
-            <Field label="LLM Latency" value={llmLatencyFormatted} />
-            <Field label="Input Tokens" value={val(cd['gen_ai.usage.input_tokens'])} />
-            <Field label="Output Tokens" value={val(cd['gen_ai.usage.output_tokens'])} />
-            <Field label="Temperature" value={val(cd['gen_ai.request.temperature'])} />
-            <Field label="Top P" value={val(cd['gen_ai.request.top_p'])} />
-            <Field label="Finish Reason" value={finishReasons} />
-            <Field label="Response ID" value={val(cd['gen_ai.response.id'])} />
+        {TYPED_SECTIONS
+          .filter(s => s.types.includes(spanType))
+          .map(section => (
+            <Section key={section.title} title={section.title}>
+              {section.title === 'LLM' && <Field label="LLM Latency" value={llmLatencyFormatted} />}
+              {section.fields.map(f => (
+                <Field key={f.key} label={f.label} value={val(cd[f.key])} />
+              ))}
+              {(section.title === 'LLM' || section.title === 'Agent') && (
+                <Field label="Finish Reason" value={finishReasons} />
+              )}
+            </Section>
+          ))}
+
+        {STATIC_SECTIONS.map(section => (
+          <Section key={section.title} title={section.title}>
+            {section.fields.map(f => (
+              <Field key={f.key} label={f.label} value={val(cd[f.key])} />
+            ))}
           </Section>
-        )}
-
-        {spanType === 'invoke_agent' && (
-          <Section title="Agent">
-            <Field label="Agent Name" value={val(cd['gen_ai.agent.name'])} />
-            <Field label="Agent ID" value={val(cd['gen_ai.agent.id'])} />
-            <Field label="Provider" value={val(cd['gen_ai.provider.name'])} />
-            <Field label="Model" value={val(cd['gen_ai.request.model'])} />
-            <Field label="Finish Reason" value={finishReasons} />
-          </Section>
-        )}
-
-        {spanType === 'execute_tool' && (
-          <Section title="Tool">
-            <Field label="Tool Name" value={val(cd['gen_ai.tool.name'])} />
-            <Field label="Tool Type" value={val(cd['gen_ai.tool.type'])} />
-            <Field label="Call ID" value={val(cd['gen_ai.tool.call.id'])} />
-            <Field label="Description" value={val(cd['gen_ai.tool.description'])} />
-            <Field label="Arguments" value={val(cd['gen_ai.tool.call.arguments'])} />
-            <Field label="Result" value={val(cd['gen_ai.tool.call.result'])} />
-          </Section>
-        )}
-
-        {(spanType === 'executor' || spanType === 'edge_group') && (
-          <Section title="Routing">
-            <Field label="Executor Type" value={val(cd['executor.type'])} />
-            <Field label="Executor ID" value={val(cd['executor.id'])} />
-            <Field label="Edge Group Type" value={val(cd['edge_group.type'])} />
-            <Field label="Edge Delivered" value={val(cd['edge_group.delivered'])} />
-          </Section>
-        )}
-
-        <Section title="Function I/O">
-          <Field label="Function Input" value={val(cd['custom_function.input'])} />
-          <Field label="Function Output" value={val(cd['custom_function.output'])} />
-          <Field label="DAC Input" value={val(cd['custom_function.dac_input'])} />
-          <Field label="DAC Output" value={val(cd['custom_function.dac_output'])} />
-        </Section>
-
-        <Section title="Endpoint I/O">
-          <Field label="Endpoint Input" value={val(cd['custom_endpoint.input'])} />
-          <Field label="Endpoint Output" value={val(cd['custom_endpoint.output'])} />
-          <Field label="DAC Input" value={val(cd['custom_endpoint.dac_input'])} />
-          <Field label="DAC Output" value={val(cd['custom_endpoint.dac_output'])} />
-        </Section>
-
-        <Section title="Tools Available">
-          <Field label="Tool Definitions" value={val(cd['gen_ai.tool.definitions'])} />
-        </Section>
-
-        <Section title="Span Links">
-          <Field label="_MS.links" value={val(cd['_MS.links'])} />
-        </Section>
+        ))}
       </div>
     </div>
   );

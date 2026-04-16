@@ -59,6 +59,11 @@ export const WORKFLOW_GRAPH_COLORS = {
   nodeSubtext: '#9CA3AF',
 } as const;
 
+export const CHART_MARGIN = { top: 5, right: 20, bottom: 5, left: 10 } as const;
+export const CHART_MARGIN_WIDE = { top: 5, right: 20, bottom: 5, left: 100 } as const;
+export const CHART_MARGIN_COMPACT = { top: 4, right: 16, left: 0, bottom: 0 } as const;
+export const LEGEND_STYLE = { fontSize: 11, color: "#9ca3af" } as const;
+
 export const WATERFALL_COLORS: Record<string, string> = {
   chat: '#4A90D9',
   execute_tool: '#E8A838',

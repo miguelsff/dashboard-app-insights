@@ -2,7 +2,8 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useTelemetry } from "@/context/TelemetryContext";
-import { AXIS_BASE, AXIS_TICK, GRID_PROPS, TOOLTIP_STYLE } from "@/lib/chart-theme";
+import { AXIS_BASE, AXIS_TICK, GRID_PROPS, TOOLTIP_STYLE, CHART_MARGIN_COMPACT } from "@/lib/chart-theme";
+import ChartCard from "@/components/ui/ChartCard";
 
 function formatHourLabel(hour: string) {
   return hour.slice(11, 13) + ":00";
@@ -11,34 +12,22 @@ function formatHourLabel(hour: string) {
 export default function ErrorRateTrendChart() {
   const { errorRateTrendData, isLoading } = useTelemetry();
 
-  if (isLoading) {
-    return (
-      <div className="card">
-        <p className="card-title mb-4">Error Rate Trend</p>
-        <div className="skeleton h-48 rounded-lg" />
-      </div>
-    );
-  }
-
-  if (errorRateTrendData.length === 0) {
-    return (
-      <div className="card">
-        <p className="card-title mb-4">Error Rate Trend</p>
-        <p className="text-sm text-gray-500 text-center py-12">No data in this period.</p>
-      </div>
-    );
-  }
-
   const data = errorRateTrendData.map((d) => ({
     label: formatHourLabel(d.hour),
     errorRate: d.errorRate,
   }));
 
   return (
-    <div className="card">
-      <p className="card-title mb-4">Error Rate Trend (hourly %)</p>
+    <ChartCard
+      title="Error Rate Trend"
+      fullTitle="Error Rate Trend (hourly %)"
+      isLoading={isLoading}
+      isEmpty={errorRateTrendData.length === 0}
+      emptyMessage="No data in this period."
+      skeletonHeight="h-48"
+    >
       <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
+        <LineChart data={data} margin={CHART_MARGIN_COMPACT}>
           <CartesianGrid {...GRID_PROPS} />
           <XAxis dataKey="label" tick={AXIS_TICK} {...AXIS_BASE} />
           <YAxis tick={AXIS_TICK} {...AXIS_BASE} unit="%" domain={[0, 'auto']} />
@@ -58,6 +47,6 @@ export default function ErrorRateTrendChart() {
           />
         </LineChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

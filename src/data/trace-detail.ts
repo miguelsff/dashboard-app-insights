@@ -3,12 +3,7 @@ import type {
   TraceDetailKpis, TraceMetadata, LlmCallTokenDatum,
   ToolCallRow, RoutingRow,
 } from '@/types/telemetry';
-import { isNullish, categorizeSpan, parseAdditionalProperties } from './telemetry';
-import { estimateCost } from '@/lib/pricing';
-
-function val(v: string | undefined): string | null {
-  return isNullish(v) ? null : v!;
-}
+import { val, isNullish, categorizeSpan, parseAdditionalProperties, accumulateTokens, computeTotalCost } from './telemetry';
 
 export function classifyWaterfallSpan(r: TelemetryRecord): WaterfallSpanType {
   const op = (r.customDimensions['gen_ai.operation.name'] ?? '').toLowerCase();
@@ -72,27 +67,7 @@ export function flattenTree(nodes: SpanTreeNode[]): SpanTreeNode[] {
 }
 
 export function computeTraceDetailKpis(trace: Trace): TraceDetailKpis {
-  let totalInput = 0;
-  let totalOutput = 0;
-  const modelTokens: Record<string, { input: number; output: number }> = {};
-
-  for (const s of trace.spans) {
-    if (categorizeSpan(s) === 'llm') {
-      const inp = parseInt(s.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
-      const out = parseInt(s.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
-      totalInput += inp;
-      totalOutput += out;
-      const model = s.customDimensions['gen_ai.request.model'] ?? 'unknown';
-      if (!modelTokens[model]) modelTokens[model] = { input: 0, output: 0 };
-      modelTokens[model].input += inp;
-      modelTokens[model].output += out;
-    }
-  }
-
-  let cost = 0;
-  for (const [model, tokens] of Object.entries(modelTokens)) {
-    cost += estimateCost(model, tokens.input, tokens.output);
-  }
+  const { totalInput, totalOutput, byModel } = accumulateTokens(trace.spans);
 
   return {
     traceId: trace.traceId,
@@ -101,7 +76,7 @@ export function computeTraceDetailKpis(trace: Trace): TraceDetailKpis {
     spanCount: trace.spanCount,
     totalInputTokens: totalInput,
     totalOutputTokens: totalOutput,
-    estimatedCostUsd: cost,
+    estimatedCostUsd: computeTotalCost(byModel),
   };
 }
 

@@ -4,29 +4,21 @@ import { useTelemetry } from "@/context/TelemetryContext";
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS, VISTA1_COLORS } from "@/lib/chart-theme";
+import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS, VISTA1_COLORS, CHART_MARGIN, LEGEND_STYLE } from "@/lib/chart-theme";
+import ChartCard from "@/components/ui/ChartCard";
 
 export default function TokensByDayChart() {
   const { tokensByDayData, isLoading } = useTelemetry();
 
-  if (isLoading) {
-    return <div className="card"><div className="skeleton h-64 rounded-lg" /></div>;
-  }
-
-  if (tokensByDayData.length === 0) {
-    return (
-      <div className="card">
-        <h3 className="card-title">Tokens por Día</h3>
-        <p className="text-sm text-gray-500">No data in this period</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="card">
-      <h3 className="card-title">Tokens por Día (Input vs Output)</h3>
+    <ChartCard
+      title="Tokens por Día"
+      fullTitle="Tokens por Día (Input vs Output)"
+      isLoading={isLoading}
+      isEmpty={tokensByDayData.length === 0}
+    >
       <ResponsiveContainer width="100%" height={280}>
-        <AreaChart data={tokensByDayData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+        <AreaChart data={tokensByDayData} margin={CHART_MARGIN}>
           <CartesianGrid {...GRID_PROPS} />
           <XAxis dataKey="day" tick={AXIS_TICK} {...AXIS_BASE} />
           <YAxis tick={AXIS_TICK} {...AXIS_BASE} tickFormatter={(v: number) => v.toLocaleString()} />
@@ -34,7 +26,7 @@ export default function TokensByDayChart() {
             {...TOOLTIP_STYLE}
             formatter={(value, name) => [Number(value).toLocaleString(), String(name)]}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
           <Area
             type="monotone"
             dataKey="inputTokens"
@@ -55,6 +47,6 @@ export default function TokensByDayChart() {
           />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

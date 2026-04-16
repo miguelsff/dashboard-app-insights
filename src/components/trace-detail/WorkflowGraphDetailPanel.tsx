@@ -2,24 +2,11 @@
 
 import type { ExecutorNodeData, WorkflowEdgeData } from '@/types/workflow-graph';
 import { formatDuration, formatTokenCount } from '@/lib/format';
-import JsonViewer from './JsonViewer';
+import Field from '@/components/ui/Field';
 
 type Selection =
   | { kind: 'node'; data: ExecutorNodeData }
   | { kind: 'edge'; data: WorkflowEdgeData; sourceId: string; targetId: string };
-
-function Field({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  const isJson = value.startsWith('{') || value.startsWith('[');
-  return (
-    <div className="py-1.5">
-      <dt className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</dt>
-      <dd className="text-xs text-gray-300 mt-0.5">
-        {isJson ? <JsonViewer value={value} /> : value}
-      </dd>
-    </div>
-  );
-}
 
 function NodeDetail({ data }: { data: ExecutorNodeData }) {
   return (

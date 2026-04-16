@@ -7,6 +7,7 @@ import type {
   LlmVsOrchestrationDatum,
 } from '@/types/telemetry';
 import { estimateCost } from '@/lib/pricing';
+import { STATUS_CODE_ERROR, STATUS_CODE_OK, E2E_SPAN_TARGET } from '@/lib/constants';
 
 export function categorizeSpan(r: TelemetryRecord): SpanCategory {
   const op = (r.customDimensions['gen_ai.operation.name'] ?? '').toLowerCase();
@@ -26,7 +27,7 @@ export function categorizeSpan(r: TelemetryRecord): SpanCategory {
 function spanFailed(r: TelemetryRecord): boolean {
   if (r.itemType === 'exception') return true;
   const code = r.customDimensions['otel.status_code'] ?? '';
-  return code === 'STATUS_CODE_ERROR';
+  return code === STATUS_CODE_ERROR;
 }
 
 export function computeTraces(records: TelemetryRecord[]): Trace[] {
@@ -235,6 +236,43 @@ export function isNullish(v: string | undefined): boolean {
   return !v || v === 'null';
 }
 
+export function val(v: string | undefined): string | null {
+  return isNullish(v) ? null : v!;
+}
+
+export interface TokenAccumulator {
+  totalInput: number;
+  totalOutput: number;
+  byModel: Record<string, { input: number; output: number }>;
+}
+
+export function accumulateTokens(spans: TelemetryRecord[]): TokenAccumulator {
+  let totalInput = 0;
+  let totalOutput = 0;
+  const byModel: Record<string, { input: number; output: number }> = {};
+
+  for (const s of spans) {
+    if (categorizeSpan(s) !== 'llm') continue;
+    const inp = parseInt(s.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
+    const out = parseInt(s.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
+    totalInput += inp;
+    totalOutput += out;
+    const model = s.customDimensions['gen_ai.request.model'] ?? 'unknown';
+    if (!byModel[model]) byModel[model] = { input: 0, output: 0 };
+    byModel[model].input += inp;
+    byModel[model].output += out;
+  }
+  return { totalInput, totalOutput, byModel };
+}
+
+export function computeTotalCost(byModel: TokenAccumulator['byModel']): number {
+  let cost = 0;
+  for (const [model, tokens] of Object.entries(byModel)) {
+    cost += estimateCost(model, tokens.input, tokens.output);
+  }
+  return cost;
+}
+
 export function parseAdditionalProperties(raw: string | undefined): ParsedAdditionalProperties {
   if (isNullish(raw)) return {};
   const result: ParsedAdditionalProperties = {};
@@ -313,34 +351,15 @@ export function percentile(values: number[], p: number): number {
 
 export function computeVista1Kpis(traces: Trace[], records: TelemetryRecord[]): Vista1Kpis {
   const e2eDurations = records
-    .filter(r => r.target === 'genai.http POST /api/chat')
+    .filter(r => r.target === E2E_SPAN_TARGET)
     .map(r => r.duration);
 
-  let totalInput = 0;
-  let totalOutput = 0;
-  const modelTokens: Record<string, { input: number; output: number }> = {};
-
-  for (const r of records) {
-    if (categorizeSpan(r) === 'llm') {
-      const inp = parseInt(r.customDimensions['gen_ai.usage.input_tokens'] ?? '0', 10) || 0;
-      const out = parseInt(r.customDimensions['gen_ai.usage.output_tokens'] ?? '0', 10) || 0;
-      totalInput += inp;
-      totalOutput += out;
-      const model = r.customDimensions['gen_ai.request.model'] ?? 'unknown';
-      if (!modelTokens[model]) modelTokens[model] = { input: 0, output: 0 };
-      modelTokens[model].input += inp;
-      modelTokens[model].output += out;
-    }
-  }
-
-  let totalCost = 0;
-  for (const [model, tokens] of Object.entries(modelTokens)) {
-    totalCost += estimateCost(model, tokens.input, tokens.output);
-  }
+  const { totalInput, totalOutput, byModel } = accumulateTokens(records);
+  const totalCost = computeTotalCost(byModel);
 
   const toolSpans = records.filter(r => categorizeSpan(r) === 'tool');
   const toolErrors = toolSpans.filter(r =>
-    r.customDimensions['otel.status_code'] === 'STATUS_CODE_ERROR' || r.itemType === 'exception',
+    r.customDimensions['otel.status_code'] === STATUS_CODE_ERROR || r.itemType === 'exception',
   );
   const toolSuccessRate = toolSpans.length > 0
     ? ((toolSpans.length - toolErrors.length) / toolSpans.length) * 100
@@ -379,8 +398,8 @@ export function computeEnhancedTraces(traces: Trace[]): EnhancedTrace[] {
         if (props.AGENT_VERSION) agentVersion = props.AGENT_VERSION;
       }
       if (!traceLink && !isNullish(cd['custom_attrs.trace_link'])) traceLink = cd['custom_attrs.trace_link']!;
-      if (cd['otel.status_code'] === 'STATUS_CODE_ERROR') hasError = true;
-      if (cd['otel.status_code'] === 'STATUS_CODE_OK') hasOk = true;
+      if (cd['otel.status_code'] === STATUS_CODE_ERROR) hasError = true;
+      if (cd['otel.status_code'] === STATUS_CODE_OK) hasOk = true;
     }
 
     const status: 'ok' | 'error' | 'unset' = hasError ? 'error' : hasOk ? 'ok' : 'unset';
@@ -512,7 +531,7 @@ export function computeAvgDurationByStage(records: TelemetryRecord[]): StageDura
 
 export function computeLlmVsOrchestration(records: TelemetryRecord[]): LlmVsOrchestrationDatum[] {
   let llmMs = 0;
-  const e2eSpans = records.filter(r => r.target === 'genai.http POST /api/chat');
+  const e2eSpans = records.filter(r => r.target === E2E_SPAN_TARGET);
   const totalE2eMs = e2eSpans.reduce((sum, r) => sum + r.duration, 0);
 
   for (const r of records) {

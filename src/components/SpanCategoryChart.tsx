@@ -4,6 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useTelemetry } from "@/context/TelemetryContext";
 import { AXIS_BASE, AXIS_TICK, GRID_PROPS, TOOLTIP_STYLE, CATEGORY_COLORS } from "@/lib/chart-theme";
 import type { SpanCategory } from "@/types/telemetry";
+import ChartCard from "@/components/ui/ChartCard";
 
 const LABELS: Record<SpanCategory, string> = {
   llm:   'LLM',
@@ -16,24 +17,6 @@ const LABELS: Record<SpanCategory, string> = {
 export default function SpanCategoryChart() {
   const { spanCategoryData, isLoading } = useTelemetry();
 
-  if (isLoading) {
-    return (
-      <div className="card">
-        <p className="card-title mb-4">Span Types</p>
-        <div className="skeleton h-48 rounded-lg" />
-      </div>
-    );
-  }
-
-  if (spanCategoryData.length === 0) {
-    return (
-      <div className="card">
-        <p className="card-title mb-4">Span Types</p>
-        <p className="text-sm text-gray-500 text-center py-12">No data.</p>
-      </div>
-    );
-  }
-
   const data = spanCategoryData.map((d) => ({
     name: LABELS[d.category] ?? d.category,
     count: d.count,
@@ -41,8 +24,13 @@ export default function SpanCategoryChart() {
   }));
 
   return (
-    <div className="card">
-      <p className="card-title mb-4">Span Types</p>
+    <ChartCard
+      title="Span Types"
+      isLoading={isLoading}
+      isEmpty={spanCategoryData.length === 0}
+      emptyMessage="No data."
+      skeletonHeight="h-48"
+    >
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 16, bottom: 0 }}>
           <CartesianGrid {...GRID_PROPS} horizontal={false} />
@@ -56,6 +44,6 @@ export default function SpanCategoryChart() {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

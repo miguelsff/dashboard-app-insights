@@ -12,6 +12,7 @@ import AgentInvocationsChart from "@/components/AgentInvocationsChart";
 import StageDurationChart from "@/components/StageDurationChart";
 import LlmVsOrchestrationChart from "@/components/LlmVsOrchestrationChart";
 import TraceTable from "@/components/TraceTable";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 function DashboardHeader() {
   const { lastUpdated, fetchError, errorMessage, isLoading } = useTelemetry();
@@ -46,33 +47,29 @@ export default function DashboardPage() {
       <DashboardHeader />
       <DateRangePicker />
       <GlobalFilters />
-      <KpiCards />
+      <ErrorBoundary fallbackMessage="Error rendering dashboard">
+        <KpiCards />
 
-      {/* Row 2: Latency + Finish Reasons */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
-          <LatencyTimeSeriesChart />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2">
+            <LatencyTimeSeriesChart />
+          </div>
+          <FinishReasonsChart />
         </div>
-        <FinishReasonsChart />
-      </div>
 
-      {/* Row 3: Tokens + Cost */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <TokensByDayChart />
-        <CostByModelChart />
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <TokensByDayChart />
+          <CostByModelChart />
+        </div>
 
-      {/* Row 4: Agents + Stage Duration */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AgentInvocationsChart />
-        <StageDurationChart />
-      </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <AgentInvocationsChart />
+          <StageDurationChart />
+        </div>
 
-      {/* Row 5: LLM vs Orchestration */}
-      <LlmVsOrchestrationChart />
-
-      {/* Trace Table */}
-      <TraceTable />
+        <LlmVsOrchestrationChart />
+        <TraceTable />
+      </ErrorBoundary>
 
       <footer className="text-center text-xs text-gray-700 py-4">
         Azure Application Insights · Agent Traces Dashboard

@@ -2,13 +2,9 @@
 
 import Link from "next/link";
 import type { EnhancedTrace } from "@/types/telemetry";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 export default function TraceDetailHeader({ trace }: { trace: EnhancedTrace }) {
-  const statusBadge =
-    trace.status === 'error' ? 'badge-failure'
-    : trace.status === 'ok' ? 'badge-success'
-    : 'badge-neutral';
-
   return (
     <header className="flex items-start justify-between gap-4 flex-wrap">
       <div>
@@ -23,8 +19,8 @@ export default function TraceDetailHeader({ trace }: { trace: EnhancedTrace }) {
           {trace.operationName}
         </p>
       </div>
-      <span className={`mt-2 ${statusBadge}`}>
-        {trace.status === 'error' ? 'ERROR' : trace.status === 'ok' ? 'OK' : 'UNSET'}
+      <span className="mt-2">
+        <StatusBadge status={trace.status} />
       </span>
     </header>
   );

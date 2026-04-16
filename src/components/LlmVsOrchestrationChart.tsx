@@ -3,31 +3,24 @@
 import { useTelemetry } from "@/context/TelemetryContext";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import type { PieLabelRenderProps } from "recharts";
-import { TOOLTIP_STYLE, VISTA1_COLORS } from "@/lib/chart-theme";
+import { TOOLTIP_STYLE, VISTA1_COLORS, LEGEND_STYLE } from "@/lib/chart-theme";
 import { formatDuration } from "@/lib/format";
+import ChartCard from "@/components/ui/ChartCard";
 
 const COLORS = [VISTA1_COLORS.llmTime, VISTA1_COLORS.orchestrationTime];
 
 export default function LlmVsOrchestrationChart() {
   const { llmVsOrchestrationData, isLoading } = useTelemetry();
 
-  if (isLoading) {
-    return <div className="card"><div className="skeleton h-64 rounded-lg" /></div>;
-  }
-
   const total = llmVsOrchestrationData.reduce((s, d) => s + d.durationMs, 0);
-  if (total === 0) {
-    return (
-      <div className="card">
-        <h3 className="card-title">LLM vs Orquestación</h3>
-        <p className="text-sm text-gray-500">No data in this period</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="card">
-      <h3 className="card-title">Tiempo en LLM vs Orquestación (promedio por traza)</h3>
+    <ChartCard
+      title="LLM vs Orquestación"
+      fullTitle="Tiempo en LLM vs Orquestación (promedio por traza)"
+      isLoading={isLoading}
+      isEmpty={total === 0}
+    >
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
           <Pie
@@ -52,9 +45,9 @@ export default function LlmVsOrchestrationChart() {
             {...TOOLTIP_STYLE}
             formatter={(value, name) => [formatDuration(Number(value)), String(name)]}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
         </PieChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

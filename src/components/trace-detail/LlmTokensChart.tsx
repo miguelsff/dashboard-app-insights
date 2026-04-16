@@ -4,29 +4,25 @@ import type { LlmCallTokenDatum } from "@/types/telemetry";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
-import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS, VISTA1_COLORS } from "@/lib/chart-theme";
+import { TOOLTIP_STYLE, AXIS_TICK, AXIS_BASE, GRID_PROPS, VISTA1_COLORS, CHART_MARGIN, LEGEND_STYLE } from "@/lib/chart-theme";
 import { formatDuration } from "@/lib/format";
+import ChartCard from "@/components/ui/ChartCard";
 
-export default function LlmTokensChart({ data }: { data: LlmCallTokenDatum[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="card">
-        <h3 className="card-title">Tokens por LLM Call</h3>
-        <p className="text-sm text-gray-500">No LLM calls in this trace</p>
-      </div>
-    );
-  }
-
+export default function LlmTokensChart({ data, isLoading = false }: { data: LlmCallTokenDatum[]; isLoading?: boolean }) {
   const chartData = data.map(d => ({
     ...d,
     name: `${d.index}. ${d.label} (${d.parentAgent})`,
   }));
 
   return (
-    <div className="card">
-      <h3 className="card-title">Tokens por LLM Call</h3>
+    <ChartCard
+      title="Tokens por LLM Call"
+      isLoading={isLoading}
+      isEmpty={data.length === 0}
+      emptyMessage="No LLM calls in this trace"
+    >
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+        <BarChart data={chartData} margin={CHART_MARGIN}>
           <CartesianGrid {...GRID_PROPS} />
           <XAxis dataKey="name" tick={AXIS_TICK} {...AXIS_BASE} interval={0} angle={-20} textAnchor="end" height={60} />
           <YAxis tick={AXIS_TICK} {...AXIS_BASE} />
@@ -48,11 +44,11 @@ export default function LlmTokensChart({ data }: { data: LlmCallTokenDatum[] }) 
               );
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
           <Bar dataKey="inputTokens" name="Input" stackId="tokens" fill={VISTA1_COLORS.inputTokens} />
           <Bar dataKey="outputTokens" name="Output" stackId="tokens" fill={VISTA1_COLORS.outputTokens} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

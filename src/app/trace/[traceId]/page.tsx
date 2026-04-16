@@ -16,6 +16,7 @@ import SpanWaterfall from "@/components/trace-detail/SpanWaterfall";
 import LlmTokensChart from "@/components/trace-detail/LlmTokensChart";
 import ToolCallsTable from "@/components/trace-detail/ToolCallsTable";
 import RoutingTable from "@/components/trace-detail/RoutingTable";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function TraceDetailPage() {
   const params = useParams<{ traceId: string }>();
@@ -72,13 +73,15 @@ export default function TraceDetailPage() {
   return (
     <main className="max-w-screen-2xl mx-auto px-4 py-8 space-y-5">
       <TraceDetailHeader trace={trace} />
-      <TraceKpiCards kpis={derived.kpis} />
-      <TraceMetadataPanel metadata={derived.metadata} />
-      <WorkflowGraph spans={trace.spans} workflowDefinitionJson={derived.metadata.workflowDefinition} />
-      <SpanWaterfall tree={derived.tree} traceDurationMs={trace.durationMs} />
-      <LlmTokensChart data={derived.llmTokens} />
-      <ToolCallsTable rows={derived.toolCalls} />
-      <RoutingTable rows={derived.routingRows} />
+      <ErrorBoundary fallbackMessage="Error rendering trace detail">
+        <TraceKpiCards kpis={derived.kpis} />
+        <TraceMetadataPanel metadata={derived.metadata} />
+        <WorkflowGraph spans={trace.spans} workflowDefinitionJson={derived.metadata.workflowDefinition} />
+        <SpanWaterfall tree={derived.tree} traceDurationMs={trace.durationMs} />
+        <LlmTokensChart data={derived.llmTokens} />
+        <ToolCallsTable rows={derived.toolCalls} />
+        <RoutingTable rows={derived.routingRows} />
+      </ErrorBoundary>
     </main>
   );
 }

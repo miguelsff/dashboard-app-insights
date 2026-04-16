@@ -3,31 +3,22 @@
 import { useTelemetry } from "@/context/TelemetryContext";
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 import type { PieLabelRenderProps } from "recharts";
-import { TOOLTIP_STYLE, FINISH_REASON_COLORS } from "@/lib/chart-theme";
+import { TOOLTIP_STYLE, FINISH_REASON_COLORS, LEGEND_STYLE } from "@/lib/chart-theme";
+import ChartCard from "@/components/ui/ChartCard";
 
 const FALLBACK_COLOR = "#6b7280";
 
 export default function FinishReasonsChart() {
   const { finishReasonsData, isLoading } = useTelemetry();
 
-  if (isLoading) {
-    return <div className="card"><div className="skeleton h-64 rounded-lg" /></div>;
-  }
-
-  if (finishReasonsData.length === 0) {
-    return (
-      <div className="card">
-        <h3 className="card-title">Finish Reasons</h3>
-        <p className="text-sm text-gray-500">No data in this period</p>
-      </div>
-    );
-  }
-
   const total = finishReasonsData.reduce((s, d) => s + d.count, 0);
 
   return (
-    <div className="card">
-      <h3 className="card-title">Finish Reasons</h3>
+    <ChartCard
+      title="Finish Reasons"
+      isLoading={isLoading}
+      isEmpty={finishReasonsData.length === 0}
+    >
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
           <Pie
@@ -52,9 +43,9 @@ export default function FinishReasonsChart() {
             {...TOOLTIP_STYLE}
             formatter={(value) => [Number(value), "Count"]}
           />
-          <Legend wrapperStyle={{ fontSize: 11, color: "#9ca3af" }} />
+          <Legend wrapperStyle={LEGEND_STYLE} />
         </PieChart>
       </ResponsiveContainer>
-    </div>
+    </ChartCard>
   );
 }

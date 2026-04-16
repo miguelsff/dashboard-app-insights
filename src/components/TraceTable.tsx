@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTelemetry } from "@/context/TelemetryContext";
-import { formatDuration, formatUtcTimeMs, formatTokenCount } from "@/lib/format";
+import { formatUtcTimeMs, formatTokenCount } from "@/lib/format";
 import type { EnhancedTrace } from "@/types/telemetry";
+import CopyButton from "@/components/ui/CopyButton";
+import DurationBadge from "@/components/ui/DurationBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
 
 const PAGE_SIZE = 20;
 
@@ -18,40 +21,6 @@ function sortTraces(traces: EnhancedTrace[], key: SortKey): EnhancedTrace[] {
     case "slowest": return sorted.sort((a, b) => b.durationMs - a.durationMs);
     case "mostSpans": return sorted.sort((a, b) => b.spanCount - a.spanCount);
   }
-}
-
-function DurationBadge({ ms }: { ms: number }) {
-  const color = ms > 15000 ? "text-red-400" : ms > 5000 ? "text-yellow-400" : "text-emerald-400";
-  return <span className={`font-mono text-xs ${color}`}>{formatDuration(ms)}</span>;
-}
-
-function StatusBadge({ status }: { status: "ok" | "error" | "unset" }) {
-  if (status === "ok") return <span className="badge-success">OK</span>;
-  if (status === "error") return <span className="badge-failure">ERROR</span>;
-  return <span className="badge-neutral">UNSET</span>;
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-  return (
-    <button onClick={handleCopy} className="ml-1 text-gray-500 hover:text-gray-300" title="Copy full ID">
-      {copied ? (
-        <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-      ) : (
-        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      )}
-    </button>
-  );
 }
 
 export default function TraceTable() {
